@@ -49,15 +49,17 @@ Local development has no login by default because the app binds to `127.0.0.1`. 
 2. Open **Advanced / testing** and choose **Mock drop (dev)**.
 3. Click **set +15s (dev)** next to the release time.
 4. Enter a name and venue, keep 2 tickets, and create the watch.
-5. Watch the card transition to **Live now**; the dashboard beeps and the activity feed updates.
-6. Click **Open booking** (a demo link) or **Mark booked**.
+5. Watch the card turn amber with **Action needed**; the dashboard beeps and the activity feed updates.
+6. Click **Open demo link** (a demo checkout page) or **Mark booked**.
 
 You can also use the mock provider from Telegram with `/newjob` → Mock → `/now` at the release step.
 
 ### Create a real BMS watch
 
 The normal provider is **Scheduled reminder** — a local scheduled alert with
-your BMS link, no scraping and no login required in the app.
+your BMS link, no scraping and no login required in the app. It does **not**
+check whether tickets are actually on sale; it only nudges you to check BMS at
+the time you choose.
 
 1. Open the movie or seat page on BookMyShow in your browser.
 2. Copy the URL from the address bar.
@@ -65,10 +67,10 @@ your BMS link, no scraping and no login required in the app.
    The movie, event code, city, venue code, and show date are filled in from the URL.
 4. If the movie page has no showtimes yet, pick **Time window** and enter the
    earliest and latest times you'd accept (for example, 18:00–23:30). If you don't
-   know when tickets open, choose **Start watching now — drop time unknown**.
+   know when tickets open, choose **Alert me now — I'll check BMS**.
 5. Set your seat category and maximum price if you want them recorded for the
    auto-cart step. Payment is still manual.
-6. Leave **Start watching immediately** checked and create the watch.
+6. Leave **Activate this watch immediately** checked and create the watch.
 
 The web guide at <http://127.0.0.1:8765/guide> and the Telegram `/guide` command
 have annotated screenshots showing exactly which part of the BMS URL is used.

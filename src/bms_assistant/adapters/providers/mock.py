@@ -23,6 +23,7 @@ class MockProvider:
             ),
             requires_booking_url=False,
             dev_only=True,
+            verifies_availability=False,
         )
 
     @property

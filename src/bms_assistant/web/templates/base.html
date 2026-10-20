@@ -34,9 +34,11 @@
         </form>
         {% endif %}
         <a class="btn btn-ghost btn-tiny" href="/guide">How to add a watch</a>
+        {% block new_watch_button %}
         <button class="btn btn-primary" id="open-job-dialog" type="button">
           <span aria-hidden="true">＋</span> New watch
         </button>
+        {% endblock %}
       </div>
     </header>
 

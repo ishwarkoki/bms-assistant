@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
@@ -46,6 +47,7 @@ async def test_dashboard_and_create_job(tmp_path):
         response = await client.get("/")
         assert response.status_code == 200
         assert "Watchlist" in response.text
+        assert 'id="open-job-dialog"' in response.text
         assert 'value="reminder"' in response.text
         assert "Scheduled reminder" in response.text
 
@@ -128,6 +130,8 @@ async def test_bms_link_form_fills_codes_and_window(tmp_path):
         assert guide.status_code == 200
         assert "How to add a BMS watch" in guide.text
         assert "ET00521930" in guide.text
+        assert 'href="/?new=1"' in guide.text
+        assert 'id="open-job-dialog"' not in guide.text
 
         payload = {
             "bms_url": (
@@ -167,6 +171,7 @@ async def test_bms_link_form_fills_codes_and_window(tmp_path):
         assert job["window_start"] == "18:00:00"
         assert job["window_end"] == "23:30:00"
         assert job["booking_url"].endswith("/ALUC/6296/20261022")
+        assert job["availability_verified"] is False
         assert job["seat_prefs"] == {
             "category": "GOLD",
             "max_price": 350,
@@ -174,6 +179,60 @@ async def test_bms_link_form_fills_codes_and_window(tmp_path):
             "need_adjacent": True,
         }
         assert job["status"] == "scheduled"
+
+    await manager.shutdown()
+
+
+async def test_reminder_card_does_not_claim_live_availability(tmp_path):
+    settings = Settings(
+        database_path=tmp_path / "reminder-card.db",
+        telegram_enabled=False,
+        timezone="UTC",
+        default_check_interval_seconds=2,
+        min_check_interval_seconds=2,
+        _env_file=None,
+    )
+    repository = SQLiteJobRepository(settings.database_path)
+    await repository.init()
+    providers = build_default_registry()
+    manager = JobManager(
+        repository=repository,
+        providers=providers,
+        settings=settings,
+        event_bus=EventBus(),
+    )
+    app = create_web_app(
+        settings=settings,
+        job_manager=manager,
+        repository=repository,
+        providers=providers,
+        event_bus=EventBus(),
+    )
+    job = await manager.create_job(
+        name="Ramayana",
+        provider="reminder",
+        venue="ALLU Cinemas",
+        quantity=2,
+        release_at=datetime.now(UTC) - timedelta(seconds=1),
+        booking_url="https://in.bookmyshow.com/movies/hyderabad/ramayana/ET00451914",
+        auto_start=True,
+    )
+
+    for _ in range(50):
+        current = await manager.get_job(job.id)
+        if current.status.value == "triggered":
+            break
+        await asyncio.sleep(0.05)
+    assert (await manager.get_job(job.id)).status.value == "triggered"
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        dashboard = await client.get("/")
+        assert dashboard.status_code == 200
+        assert "Reminder due" in dashboard.text
+        assert "not a live BMS check" in dashboard.text
+        assert "Check BMS showtimes" in dashboard.text
+        assert "Tickets look live" not in dashboard.text
 
     await manager.shutdown()
 

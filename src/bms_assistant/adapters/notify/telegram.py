@@ -73,22 +73,23 @@ class TelegramNotifier:
                 [
                     f"<b>ID:</b> <code>{job.short_id}</code>",
                     "",
-                    "Open the link, choose seats, and pay in BMS. "
-                    "Never share an OTP, CVV, or UPI PIN.",
+                    "Open the link and check BMS. If tickets are on sale, choose seats "
+                    "and pay in BMS. Never share an OTP, CVV, or UPI PIN.",
                 ]
             )
 
         buttons: list[list[InlineKeyboardButton]] = []
         if notification.url:
             is_bms = "bookmyshow.com" in notification.url
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "Open BMS seats ↗" if is_bms else "Open booking ↗",
-                        url=notification.url,
-                    )
-                ]
-            )
+            if job is not None and not job.availability_verified:
+                label = (
+                    "Open demo link ↗"
+                    if job.provider == "mock"
+                    else ("Check BMS ↗" if is_bms else "Open reminder link ↗")
+                )
+            else:
+                label = "Open BMS seats ↗" if is_bms else "Open booking ↗"
+            buttons.append([InlineKeyboardButton(label, url=notification.url)])
         if job:
             buttons.append(
                 [

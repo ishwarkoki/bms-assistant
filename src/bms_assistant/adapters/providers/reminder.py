@@ -27,6 +27,7 @@ class ReminderProvider:
             ),
             requires_booking_url=True,
             dev_only=False,
+            verifies_availability=False,
         )
 
     @property
@@ -45,5 +46,5 @@ class ReminderProvider:
         return Availability(
             True,
             booking_url=job.booking_url,
-            detail="Drop time reached — hand off to manual checkout",
+            detail="Reminder time reached — check BMS; availability was not verified",
         )

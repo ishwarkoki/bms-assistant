@@ -56,6 +56,19 @@
     openDialog();
   }
 
+  // Topbar "New watch" on guide/help pages links back here with ?new=1.
+  const pageParams = new URLSearchParams(window.location.search);
+  if (pageParams.get("new") === "1") {
+    openDialog();
+    pageParams.delete("new");
+    const remaining = pageParams.toString();
+    history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${remaining ? `?${remaining}` : ""}${window.location.hash}`
+    );
+  }
+
   /* ------------------------------------------------------------ provider fields */
 
   function updateProviderFields() {
@@ -427,7 +440,7 @@
       seenTriggered.add(id);
       const name = $(".job-name", card)?.textContent?.trim() || "A watch";
       playAlert();
-      showToast("Tickets look live", `${name} needs a handoff.`, "live");
+      showToast("Action needed", `${name} needs a handoff.`, "live");
     });
   }
 
@@ -475,7 +488,7 @@
         if (data.type === "job.triggered" && data.job_id && !seenTriggered.has(data.job_id)) {
           seenTriggered.add(data.job_id);
           playAlert();
-          showToast("Tickets look live", data.message || "Open the booking page now.", "live");
+          showToast("Action needed", data.message || "Open BMS and check the latest alert.", "live");
         }
       } catch (error) {
         console.debug("Bad SSE payload", error);

@@ -2,6 +2,12 @@
 
 {% block title %}How to add a BMS watch · {{ app_name }}{% endblock %}
 
+{% block new_watch_button %}
+<a class="btn btn-primary" href="/?new=1">
+  <span aria-hidden="true">＋</span> New watch
+</a>
+{% endblock %}
+
 {% block content %}
 <section class="guide-hero">
   <div>
@@ -103,7 +109,7 @@
         </li>
         <li>Set the <strong>show date</strong> to the day you want.</li>
         <li>Choose <strong>Time window</strong> and enter the range you'd accept, for example <code>18:00</code> to <code>23:30</code>.</li>
-        <li>If you don't know when tickets open, choose <strong>Start watching now — drop time unknown</strong>.</li>
+        <li>If you don't know when tickets open, choose <strong>Alert me now — I'll check BMS</strong>.</li>
       </ol>
       <div class="window-note">
         <strong>Why a window?</strong> A movie can publish 7:00 PM, 9:30 PM, and
@@ -142,7 +148,7 @@
           <tr><td>Venue code</td><td>The theatre code from the seat-page URL; blank = all theatres in the city</td><td><code>ALUC</code></td></tr>
           <tr><td>Show date</td><td>The date on BMS</td><td>2026-10-22</td></tr>
           <tr><td>Showtime</td><td>Exact time, a window, or any time</td><td>18:00–23:30</td></tr>
-          <tr><td>Ticket drop</td><td>Known drop time, or “start watching now”</td><td>21 Oct, 10:00 AM</td></tr>
+          <tr><td>Ticket drop</td><td>Known drop time, or “alert me now”</td><td>21 Oct, 10:00 AM</td></tr>
           <tr><td>Tickets</td><td>How many seats you want</td><td>2</td></tr>
           <tr><td>Seat category / max price</td><td>Optional filters for auto-cart seat scoring</td><td>GOLD · ₹350</td></tr>
         </tbody>
@@ -173,9 +179,10 @@
       </div>
       <p>
         In the Telegram alert you'll get the show details and a direct BMS link.
-        In the dashboard, a triggered watch turns amber and shows
-        <strong>Open BMS seats</strong>. Complete the payment there, then mark the
-        watch as booked.
+        In the dashboard, a fired watch turns amber. A
+        <strong>Scheduled reminder</strong> means it is time to check BMS — it
+        does <em>not</em> confirm that tickets are on sale. If BMS shows a Book
+        tickets button, choose seats and pay there, then mark the watch as booked.
       </p>
     </div>
   </section>

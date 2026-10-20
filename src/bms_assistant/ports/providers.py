@@ -16,6 +16,10 @@ class ProviderInfo:
     description: str
     requires_booking_url: bool = False
     dev_only: bool = False
+    # True only for providers that actually observe BMS ticket availability.
+    # Reminder and mock providers fire on a clock, so their alerts must not be
+    # presented as proof that tickets are on sale.
+    verifies_availability: bool = False
 
 
 class TicketProvider(Protocol):

@@ -103,7 +103,15 @@ def _job_text(job: Job, settings: Settings) -> str:
 def _job_keyboard(job: Job) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if job.booking_url:
-        rows.append([InlineKeyboardButton("Open booking ↗", url=job.booking_url)])
+        if job.availability_verified:
+            label = "Open BMS seats ↗" if "bookmyshow.com" in job.booking_url else "Open booking ↗"
+        elif job.provider == "mock":
+            label = "Open demo link ↗"
+        elif "bookmyshow.com" in job.booking_url:
+            label = "Check BMS ↗"
+        else:
+            label = "Open reminder link ↗"
+        rows.append([InlineKeyboardButton(label, url=job.booking_url)])
     if job.status == JobStatus.MONITORING:
         rows.append([InlineKeyboardButton("Pause", callback_data=f"action:stop:{job.id}")])
     elif job.status != JobStatus.BOOKED:
@@ -280,7 +288,7 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         (
             "<b>Ticket Watch status</b>\n"
             f"Watching: <b>{stats.monitoring}</b>\n"
-            f"Live now: <b>{stats.triggered}</b>\n"
+            f"Needs action: <b>{stats.triggered}</b>\n"
             f"Booked: <b>{stats.booked}</b>\n"
             f"Total watches: {stats.total}\n"
             f"Timezone: <code>{escape(settings.timezone)}</code>"
@@ -304,7 +312,8 @@ async def newjob_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     await update.effective_message.reply_text(
         "<b>New watch — provider</b>\nChoose how this watch should alert you:\n\n"
         "🎭 <b>Mock</b> — test the full alert flow. No real network check.\n"
-        "⏰ <b>Reminder</b> — a scheduled alert with your BMS link, no scraping.\n\n"
+        "⏰ <b>Reminder</b> — a scheduled alert with your BMS link. "
+        "It does not check ticket availability; you check BMS yourself.\n\n"
         "Next you'll paste a BMS link. Send /guide for screenshots.",
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
@@ -416,9 +425,10 @@ async def _ask_release(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if message:
         await message.reply_text(
             "<b>BMS watch — drop time</b>\n"
-            "When do tickets open? Send <code>YYYY-MM-DD HH:MM</code> in "
+            "When should I remind you to check BMS? Send <code>YYYY-MM-DD HH:MM</code> in "
             f"<code>{escape(settings.timezone)}</code>.\n\n"
-            "Don't know? Send /now to start watching now.",
+            "A scheduled reminder does not check ticket availability.\n"
+            "Don't know? Send /now to set an immediate reminder.",
             parse_mode=ParseMode.HTML,
         )
     return RELEASE
@@ -622,7 +632,7 @@ async def release_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     context.user_data["release_at"] = utcnow() + timedelta(seconds=15)
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Release set to 15 seconds from now (watching starts immediately).",
+            "Reminder set for 15 seconds from now. This is not a BMS availability check.",
         )
     return await _ask_quantity(update, context)
 
@@ -635,7 +645,7 @@ async def release_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except ValueError as exc:
         if update.effective_message:
             await update.effective_message.reply_text(
-                f"{exc}\nTry again, or use /now to start watching now.",
+                f"{exc}\nTry again, or use /now to set an immediate reminder.",
             )
         return RELEASE
     context.user_data["release_at"] = parsed

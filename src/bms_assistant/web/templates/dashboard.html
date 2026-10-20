@@ -227,7 +227,7 @@
             </label>
             <label class="choice">
               <input type="radio" name="release_mode" value="now" {% if release_mode == 'now' %}checked{% endif %}>
-              <span>Start watching now — drop time unknown</span>
+              <span>Alert me now — I'll check BMS</span>
             </label>
           </div>
         </div>
@@ -239,6 +239,10 @@
           <button class="btn btn-ghost btn-tiny" id="quick-release" type="button">
             set +15s (dev)
           </button>
+          <small class="field-hint">
+            A scheduled reminder alerts at this time. It does not check whether
+            BMS has opened ticket sales.
+          </small>
         </label>
       </div>
     </section>
@@ -341,7 +345,7 @@
     <label class="check-row">
       {% set auto_start_checked = form.get('auto_start') in ('on', 'true', '1', 'yes') if form else true %}
       <input type="checkbox" name="auto_start" {% if auto_start_checked %}checked{% endif %}>
-      <span>Start watching immediately</span>
+      <span>Activate this watch immediately</span>
     </label>
 
     <div class="dialog-actions">

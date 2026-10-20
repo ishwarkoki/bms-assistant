@@ -92,7 +92,7 @@ def parse_new_job_form(
     else:
         release_raw = _text(data, "release_at")
         if not release_raw:
-            raise ValueError('Pick a drop time, or choose "Start watching now".')
+            raise ValueError('Pick a drop time, or choose "Alert me now".')
         release_at = parse_local_datetime(release_raw, tz)
 
     showtime_mode = _text(data, "showtime_mode", "any")

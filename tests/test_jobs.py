@@ -70,9 +70,57 @@ async def test_create_and_trigger_mock_job(tmp_path, settings):
     current = await manager.get_job(job.id)
     assert current.status == JobStatus.TRIGGERED
     assert current.booking_url == f"https://example.com/ticket-watch/{job.id}"
+    assert current.availability_verified is False
+    assert current.status_label == "Mock alert"
     assert notifier.items
     assert notifier.items[-1].kind == "triggered"
     assert notifier.items[-1].url == current.booking_url
+    assert notifier.items[-1].title == "Mock alert — not a real drop"
+    await manager.shutdown()
+
+
+async def test_reminder_fires_as_reminder_not_live_signal(tmp_path, settings):
+    import asyncio
+
+    from bms_assistant.adapters.providers.registry import build_default_registry
+    from bms_assistant.adapters.storage.sqlite import SQLiteJobRepository
+    from bms_assistant.services.event_bus import EventBus
+    from bms_assistant.services.job_manager import JobManager
+
+    repository = SQLiteJobRepository(tmp_path / "reminder.db")
+    await repository.init()
+    notifier = RecordingNotifier()
+    manager = JobManager(
+        repository=repository,
+        providers=build_default_registry(),
+        settings=settings,
+        event_bus=EventBus(),
+        notifiers=[notifier],
+    )
+    job = await manager.create_job(
+        name="Ramayana",
+        provider="reminder",
+        venue="ALLU Cinemas",
+        quantity=2,
+        release_at=utcnow() - timedelta(seconds=1),
+        booking_url="https://in.bookmyshow.com/movies/hyderabad/ramayana/ET00451914",
+        auto_start=True,
+    )
+
+    for _ in range(50):
+        current = await manager.get_job(job.id)
+        if current.status == JobStatus.TRIGGERED and notifier.items:
+            break
+        await asyncio.sleep(0.05)
+
+    current = await manager.get_job(job.id)
+    assert current.status == JobStatus.TRIGGERED
+    assert current.availability_verified is False
+    assert current.status_label == "Reminder due"
+    notification = notifier.items[-1]
+    assert notification.title == "Reminder due — check BMS"
+    assert "not a BMS availability check" in notification.body
+    assert "Tickets look live" not in notification.body
     await manager.shutdown()
 
 

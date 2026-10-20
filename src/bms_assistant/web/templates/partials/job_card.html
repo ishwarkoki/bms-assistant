@@ -36,11 +36,23 @@
   {% if status == 'triggered' %}
     <div class="trigger-strip">
       <span class="trigger-dot"></span>
-      <p>Tickets look live. Open the booking page and pay manually in BMS. Never share an OTP, CVV, or UPI PIN.</p>
+      {% if job.availability_verified %}
+        <p>Tickets look live. Open the BMS link, choose seats, and pay there. Never share an OTP, CVV, or UPI PIN.</p>
+      {% elif job.provider == 'mock' %}
+        <p><strong>Mock alert only.</strong> This is a development simulation — BookMyShow was not checked. Use it to test notifications, not to buy tickets.</p>
+      {% else %}
+        <p><strong>Reminder due — not a live BMS check.</strong> Open BMS and look for a Book tickets button. If it is missing, sales may not have opened yet. Pay only inside BMS; never share an OTP, CVV, or UPI PIN.</p>
+      {% endif %}
     </div>
     {% if job.booking_url %}
       <a class="btn btn-success btn-block" href="{{ job.booking_url }}" target="_blank" rel="noopener">
-        Open BMS seats ↗
+        {% if job.availability_verified %}
+          {% if '/seat-layout/' in job.booking_url %}Open BMS seats ↗{% else %}Open BMS showtimes ↗{% endif %}
+        {% elif job.provider == 'mock' %}
+          Open demo link ↗
+        {% else %}
+          {% if '/seat-layout/' in job.booking_url %}Open BMS seat page ↗{% else %}Check BMS showtimes ↗{% endif %}
+        {% endif %}
       </a>
     {% endif %}
   {% endif %}

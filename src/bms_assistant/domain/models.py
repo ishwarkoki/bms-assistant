@@ -29,7 +29,7 @@ class JobStatus(StrEnum):
 STATUS_LABELS: dict[JobStatus, str] = {
     JobStatus.SCHEDULED: "Scheduled",
     JobStatus.MONITORING: "Watching",
-    JobStatus.TRIGGERED: "Live now",
+    JobStatus.TRIGGERED: "Action needed",
     JobStatus.BOOKED: "Booked",
     JobStatus.STOPPED: "Paused",
     JobStatus.FAILED: "Failed",
@@ -69,7 +69,17 @@ class Job:
 
     @property
     def status_label(self) -> str:
+        if self.status == JobStatus.TRIGGERED:
+            if self.provider == "mock":
+                return "Mock alert"
+            if not self.availability_verified:
+                return "Reminder due"
         return STATUS_LABELS[self.status]
+
+    @property
+    def availability_verified(self) -> bool:
+        """Whether an alert came from a real BMS availability check."""
+        return bool(self.config.get("verifies_availability", False))
 
     @property
     def is_watching(self) -> bool:
@@ -102,6 +112,7 @@ class Job:
             "quantity": self.quantity,
             "status": self.status.value,
             "status_label": self.status_label,
+            "availability_verified": self.availability_verified,
             "show_at": self.show_at.isoformat() if self.show_at else None,
             "release_at": self.release_at.isoformat() if self.release_at else None,
             "booking_url": self.booking_url,

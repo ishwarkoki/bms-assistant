@@ -157,7 +157,10 @@ class JobManager:
         seat_prefs = {
             key: value for key, value in (seat_prefs or {}).items() if value not in (None, "", [])
         }
-        config: dict[str, Any] = {"check_interval_seconds": interval}
+        config: dict[str, Any] = {
+            "check_interval_seconds": interval,
+            "verifies_availability": info.verifies_availability,
+        }
         if seat_prefs:
             config["seats"] = seat_prefs
         now = utcnow()
@@ -269,9 +272,25 @@ class JobManager:
 
         await self._repository.record_check(job.id, utcnow(), error=None, error_count=0)
         if result.available:
-            message = f"Manual check: tickets look live. {result.booking_url or ''}".strip()
+            if job.availability_verified:
+                message = f"Manual check: tickets look live. {result.booking_url or ''}".strip()
+            elif job.provider == "mock":
+                message = (
+                    "Manual check: mock drop fired. This is a development simulation; "
+                    "BookMyShow was not checked."
+                )
+            else:
+                message = (
+                    "Manual check: reminder time reached. This is not a BMS availability "
+                    "check — open BMS to see whether tickets are on sale."
+                )
         else:
-            message = f"Manual check: not live yet. {result.detail}".strip()
+            if job.availability_verified:
+                message = f"Manual check: not live yet. {result.detail}".strip()
+            elif job.provider == "mock":
+                message = f"Manual check: mock drop not due yet. {result.detail}".strip()
+            else:
+                message = f"Manual check: reminder not due yet. {result.detail}".strip()
         await self._record_event(job.id, "checked", message)
         return result
 
@@ -393,20 +412,45 @@ class JobManager:
         seat_note = ""
         if job.seat_prefs.get("category"):
             seat_note = f" Seat category: {job.seat_prefs['category']}."
-        message = (
-            f"Tickets look live for {job.name} at {job.venue}{schedule}. "
-            f"Open the BMS link and pay manually.{seat_note}"
-        )
+
+        if job.availability_verified:
+            title = "Tickets look live"
+            message = (
+                f"Tickets look live for {job.name} at {job.venue}{schedule}. "
+                "Open the BMS link and choose seats. Payment stays manual."
+            )
+        elif job.provider == "mock":
+            title = "Mock alert — not a real drop"
+            message = (
+                f"Mock drop fired for {job.name} at {job.venue}{schedule}. "
+                "This is a development simulation — BookMyShow was not checked. "
+                "Use it only to test the alert and handoff flow."
+            )
+        else:
+            title = "Reminder due — check BMS"
+            message = (
+                f"Reminder time reached for {job.name} at {job.venue}{schedule}. "
+                "This is a scheduled reminder, not a BMS availability check. "
+                "Open BMS and look for a Book tickets button; if it is missing, "
+                "sales may not have opened yet."
+            )
+        message = f"{message}{seat_note}"
+
         await self._record_event(
             job.id,
             "triggered",
             message,
-            {"booking_url": job.booking_url, "detail": result.detail},
+            {
+                "booking_url": job.booking_url,
+                "detail": result.detail,
+                "provider": job.provider,
+                "verifies_availability": job.availability_verified,
+            },
         )
         await self._notify(
             Notification(
                 kind="triggered",
-                title="Tickets look live",
+                title=title,
                 body=(
                     f"{message}\n\n"
                     f"Seats needed: {job.quantity}. "
