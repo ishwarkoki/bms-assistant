@@ -61,7 +61,7 @@ async def test_create_and_trigger_mock_job(tmp_path, settings):
 
     for _ in range(50):
         current = await manager.get_job(job.id)
-        if current.status == JobStatus.TRIGGERED:
+        if current.status == JobStatus.TRIGGERED and notifier.items:
             break
         import asyncio
 

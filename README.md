@@ -1,6 +1,6 @@
 # Ticket Watch
 
-A local-first ticket **watchlist** with a web dashboard and a Telegram bot. It checks a release window, alerts you loudly when tickets look live, and hands you the booking page. You choose the seats and approve the payment.
+A local-first ticket **watchlist** with a web dashboard and a Telegram bot. It watches your drop window, alerts you loudly when it's time to check BMS, and hands you the booking page. You choose the seats and approve the payment.
 
 An **opt-in** auto-cart module is being added incrementally: browser automation that can score, select, and temporarily hold seats, then stop at the payment screen and wait for you. See [BMS auto-cart (opt-in)](#bms-auto-cart-opt-in).
 
