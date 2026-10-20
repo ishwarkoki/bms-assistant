@@ -10,7 +10,7 @@
 # database are single-instance by design.
 
 app = "bms-assistant"
-primary_region = "bom"
+primary_region = "sin"
 kill_signal = "SIGTERM"
 kill_timeout = "30s"
 

@@ -78,6 +78,38 @@ Watches created from Telegram store that chat id automatically. Web-created watc
 
 Useful commands: `/newjob`, `/jobs`, `/job <id>`, `/run`, `/stop`, `/booked`, `/delete`, `/testalert`, `/status`.
 
+## Run it on your own machine (free)
+
+The most practical free setup: keep the watcher running on this machine and use Telegram as the remote control. No hosting, no card, and SQLite stays on disk between restarts.
+
+```bash
+./scripts/run-local.sh
+```
+
+The script wraps the app in `caffeinate` so macOS does not idle-sleep while it runs. Things to know:
+
+- Keep the Mac plugged in, and keep the lid **open** on a MacBook — closing the lid sleeps it regardless.
+- Run it inside `tmux` (or a launchd agent) if you want it to survive closing the terminal.
+- Telegram uses long polling, so no open ports, router changes, or public IP are needed.
+- If the machine is offline at drop time, no alert can reach you. That is the trade-off for free.
+
+### Reach the dashboard from your phone (optional)
+
+The app binds to `127.0.0.1`, so the dashboard is only reachable on this machine. A free Cloudflare quick tunnel exposes it over HTTPS with no account:
+
+```bash
+brew install cloudflared
+cloudflared tunnel --url http://127.0.0.1:8765
+```
+
+Open the printed `https://…trycloudflare.com` URL on your phone. **Set `BMS_AUTH_PASSWORD` first** — that URL is public, and without a password anyone who finds it can control your watches:
+
+```dotenv
+BMS_AUTH_PASSWORD=a-long-random-password
+```
+
+The URL changes every time the tunnel restarts. Tailscale Funnel (`tailscale funnel 8765`) is the alternative if you want a stable `*.ts.net` address.
+
 ## Configuration
 
 All settings use the `BMS_` prefix and are loaded from `.env`.
@@ -188,6 +220,8 @@ Providers must be side-effect free. If you integrate with a platform, use an off
 ## Deploying
 
 This app is designed for **one always-on instance with a persistent disk**. The monitor loop, Telegram long polling, in-process SSE bus, and SQLite all assume a single process. Do not enable autoscaling, and do not run multiple replicas against the same database.
+
+If you would rather not pay for hosting, skip this section and [run it on your own machine](#run-it-on-your-own-machine-free) instead.
 
 `BMS_ENVIRONMENT=production` enforces the public-deployment basics:
 
