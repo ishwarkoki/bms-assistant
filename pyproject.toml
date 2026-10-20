@@ -16,6 +16,13 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
 ]
 
+[project.optional-dependencies]
+# Opt-in browser tooling for the BMS auto-cart flow. Not installed by default:
+#   uv sync --extra bms
+bms = [
+    "playwright>=1.49",
+]
+
 [dependency-groups]
 dev = [
     "httpx>=0.27.2",
