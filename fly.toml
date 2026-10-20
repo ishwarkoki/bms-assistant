@@ -1,0 +1,47 @@
+# Fly.io configuration for one always-on instance with a persistent volume.
+# Change `app` and `primary_region` before deploying if needed.
+#
+#   fly volumes create bms_data --size 1 --region bom
+#   fly secrets set BMS_AUTH_PASSWORD=... BMS_SESSION_SECRET=... \
+#     BMS_TELEGRAM_BOT_TOKEN=... BMS_TELEGRAM_CHAT_ID=...
+#   fly deploy
+#
+# Keep exactly one machine. The monitoring loop, Telegram polling and SQLite
+# database are single-instance by design.
+
+app = "bms-assistant"
+primary_region = "bom"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  BMS_ENVIRONMENT = "production"
+  BMS_HOST = "0.0.0.0"
+  BMS_PORT = "8765"
+  BMS_DATABASE_PATH = "/data/bms_assistant.db"
+  BMS_TIMEZONE = "Asia/Kolkata"
+
+[mounts]
+  source = "bms_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8765
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

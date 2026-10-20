@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import secrets
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import asdict
@@ -32,9 +34,19 @@ from bms_assistant.ports.repository import JobRepository
 from bms_assistant.services.event_bus import EventBus
 from bms_assistant.services.job_manager import JobManager
 from bms_assistant.timeutils import format_local, format_local_input, format_relative
+from bms_assistant.web.auth import (
+    SESSION_COOKIE,
+    SESSION_MAX_AGE_SECONDS,
+    is_authorized,
+    is_public_path,
+    issue_session,
+    safe_next_url,
+    unauthorized_response,
+)
 from bms_assistant.web.forms import parse_new_job_form
 
 WEB_ROOT = Path(__file__).resolve().parent
+logger = logging.getLogger(__name__)
 
 
 class JobCreateRequest(BaseModel):
@@ -84,6 +96,7 @@ def create_web_app(
         app_name=settings.app_name,
         timezone=settings.timezone,
         telegram_ready=settings.telegram_ready,
+        auth_enabled=settings.auth_enabled,
         status_labels=STATUS_LABELS,
     )
 
@@ -135,6 +148,12 @@ def create_web_app(
         )
 
     @app.middleware("http")
+    async def require_auth(request: Request, call_next: Any) -> Response:
+        if is_public_path(request.url.path) or is_authorized(request, settings):
+            return await call_next(request)
+        return unauthorized_response(request)
+
+    @app.middleware("http")
     async def security_headers(request: Request, call_next: Any) -> Response:
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -146,8 +165,55 @@ def create_web_app(
             "img-src 'self' data:; connect-src 'self'; form-action 'self'; "
             "base-uri 'none'; frame-ancestors 'none'",
         )
-        if request.url.path == "/":
+        if request.url.path in {"/", "/login"}:
             response.headers.setdefault("Cache-Control", "no-store")
+        return response
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request, next: str = "/") -> Response:
+        target = safe_next_url(next)
+        if not settings.auth_enabled or is_authorized(request, settings):
+            return RedirectResponse(url=target, status_code=303)
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"request": request, "next": target, "error": None},
+        )
+
+    @app.post("/login", response_class=HTMLResponse)
+    async def login_submit(request: Request) -> Response:
+        form = await request.form()
+        password = str(form.get("password", ""))
+        target = safe_next_url(str(form.get("next", "/")))
+        provided = password.encode("utf-8")
+        expected = (settings.auth_password or "").encode("utf-8")
+        if settings.auth_enabled and secrets.compare_digest(provided, expected):
+            response = RedirectResponse(url=target, status_code=303)
+            response.set_cookie(
+                SESSION_COOKIE,
+                issue_session(settings),
+                max_age=SESSION_MAX_AGE_SECONDS,
+                httponly=True,
+                samesite="lax",
+                secure=settings.cookies_secure,
+                path="/",
+            )
+            return response
+
+        await asyncio.sleep(0.5)
+        client = request.client.host if request.client else "unknown"
+        logger.warning("Failed web login from %s", client)
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"request": request, "next": target, "error": "Wrong password."},
+            status_code=401,
+        )
+
+    @app.post("/logout")
+    async def logout() -> Response:
+        response = RedirectResponse(url="/login", status_code=303)
+        response.delete_cookie(SESSION_COOKIE, path="/")
         return response
 
     @app.get("/", response_class=HTMLResponse)

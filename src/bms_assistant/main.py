@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -119,11 +120,20 @@ def configure_logging(settings: Settings) -> None:
 def run() -> None:
     settings = get_settings()
     configure_logging(settings)
+    if settings.auth_enabled:
+        logger.info("Web dashboard password protection is enabled")
+        if not settings.session_secret:
+            logger.warning(
+                "BMS_SESSION_SECRET is not set; sessions will be invalidated on every restart"
+            )
+    else:
+        logger.warning("Web dashboard has no password; keep it bound to localhost")
     runtime = build_runtime(settings)
+    port = settings.port if os.getenv("BMS_PORT") else int(os.getenv("PORT", settings.port))
     uvicorn.run(
         runtime.web_app,
         host=settings.host,
-        port=settings.port,
+        port=port,
         log_level=settings.log_level.lower(),
         access_log=False,
     )

@@ -37,6 +37,11 @@ def build_telegram_application(settings: Settings) -> Application | None:
         logger.info("Telegram is disabled (no bot token configured)")
         return None
 
+    if settings.telegram_chat_id is None:
+        logger.warning(
+            "BMS_TELEGRAM_CHAT_ID is not set; any Telegram user can control these watches"
+        )
+
     application = (
         ApplicationBuilder()
         .token(settings.telegram_bot_token)

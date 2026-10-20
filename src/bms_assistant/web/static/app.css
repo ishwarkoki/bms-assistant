@@ -474,6 +474,30 @@ body {
   font-size: 12px;
 }
 
+/* ---------------------------------------------------------------- login */
+.login-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.login-card {
+  width: min(390px, 100%);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+.login-card h1 { margin: 16px 0 6px; font-size: 24px; }
+.login-card .muted { margin: 0 0 20px; }
+.login-form { display: grid; gap: 14px; }
+.login-form .btn { width: 100%; }
+.logout-form { display: inline; margin: 0; }
+
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1020px) {
   .hero { grid-template-columns: 1fr; padding-top: 40px; }

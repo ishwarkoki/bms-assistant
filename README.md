@@ -37,6 +37,8 @@ Open <http://127.0.0.1:8765>.
 
 The app runs fine **without Telegram**. Set a token later to enable push alerts.
 
+Local development has no login by default because the app binds to `127.0.0.1`. Setting `BMS_AUTH_PASSWORD` enables the login page; `BMS_ENVIRONMENT=production` requires it. See [Authentication](#authentication) and [Deploying](#deploying).
+
 ### First dev test
 
 1. Click **New watch**.
@@ -64,11 +66,13 @@ curl -X POST http://127.0.0.1:8765/api/jobs \
    BMS_TELEGRAM_BOT_TOKEN=123456789:...
    ```
 3. Message your bot `/start`. It replies with your chat id.
-4. For alerts about watches created in the **web UI**, also set:
+4. Set that chat id:
    ```dotenv
    BMS_TELEGRAM_CHAT_ID=123456789
    ```
 5. Restart the app.
+
+`BMS_TELEGRAM_CHAT_ID` does two jobs: it is the default alert destination for web-created watches, and it **locks the bot to that chat**. Other users can still run `/start` to see their own chat id, but every other command and button is ignored. If the variable is unset, the bot logs a warning and accepts commands from anyone. Production requires it whenever a token is configured.
 
 Watches created from Telegram store that chat id automatically. Web-created watches use `BMS_TELEGRAM_CHAT_ID`.
 
@@ -80,8 +84,9 @@ All settings use the `BMS_` prefix and are loaded from `.env`.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
+| `BMS_ENVIRONMENT` | `dev` | `production` enables public-deployment safety checks |
 | `BMS_HOST` | `127.0.0.1` | Use `0.0.0.0` only inside Docker or a trusted network |
-| `BMS_PORT` | `8765` | Web UI port |
+| `BMS_PORT` | `8765` | Web UI port. The platform `PORT` is honored when `BMS_PORT` is unset |
 | `BMS_TIMEZONE` | `Asia/Kolkata` | All form and Telegram times are parsed in this zone |
 | `BMS_DATABASE_PATH` | `data/bms_assistant.db` | Relative paths resolve to the project root |
 | `BMS_DEFAULT_CHECK_INTERVAL_SECONDS` | `5` | Default poll interval |
@@ -89,7 +94,33 @@ All settings use the `BMS_` prefix and are loaded from `.env`.
 | `BMS_MAX_CONSECUTIVE_ERRORS` | `5` | Provider errors before a watch is failed |
 | `BMS_TELEGRAM_ENABLED` | `true` | Set `false` to disable the bot entirely |
 | `BMS_TELEGRAM_BOT_TOKEN` | unset | Enables the bot when present |
-| `BMS_TELEGRAM_CHAT_ID` | unset | Default chat for web-created watches |
+| `BMS_TELEGRAM_CHAT_ID` | unset | Alert destination and the only chat allowed to control the bot |
+| `BMS_AUTH_PASSWORD` | unset | Enables dashboard login. Required in production, minimum 12 characters |
+| `BMS_SESSION_SECRET` | unset | Signs the login cookie. Set it in production to survive restarts |
+| `BMS_API_TOKEN` | unset | Optional bearer token for scripted `/api/*` calls |
+| `BMS_SECURE_COOKIES` | auto | Defaults to `true` in production; set explicitly if TLS is terminated elsewhere |
+
+## Authentication
+
+Local development is intentionally frictionless: with no `BMS_AUTH_PASSWORD`, the dashboard has no login and should stay on `127.0.0.1`.
+
+For anything reachable from the internet:
+
+```dotenv
+BMS_ENVIRONMENT=production
+BMS_AUTH_PASSWORD=a-long-random-password
+BMS_SESSION_SECRET=a-separate-random-secret
+BMS_API_TOKEN=optional-token-for-scripts
+```
+
+- `BMS_ENVIRONMENT=production` refuses to start without a password.
+- The login cookie is HTTP-only, `SameSite=Lax`, and secure in production.
+- `BMS_SESSION_SECRET` signs the cookie. Without it, a random secret is generated at startup, so every restart signs you out.
+- With auth enabled, `/api/*` accepts either the browser cookie or `Authorization: Bearer $BMS_API_TOKEN`.
+- `/health` and `/static/*` remain public. The health endpoint only exposes counts.
+- Failed logins are delayed and logged.
+
+Generate secrets locally with `openssl rand -hex 32`. Never commit them; the pre-commit secret scanner blocks `.env` and key material.
 
 ## Architecture
 
@@ -129,6 +160,8 @@ The dependency rule is inward: `domain` knows nothing about FastAPI, SQLite, or 
 | `POST` | `/jobs/{id}/booked` | Mark as booked |
 | `POST` | `/jobs/{id}/delete` | Delete |
 
+When authentication is enabled, send the browser cookie or `Authorization: Bearer $BMS_API_TOKEN`. `/health` stays public for platform health checks.
+
 ## Adding a provider
 
 Implement the `TicketProvider` protocol in `src/bms_assistant/adapters/providers/`:
@@ -152,6 +185,53 @@ Register it in `build_default_registry()`. The job manager, web UI, and Telegram
 
 Providers must be side-effect free. If you integrate with a platform, use an official or permitted interface, respect its terms, and keep the handoff manual.
 
+## Deploying
+
+This app is designed for **one always-on instance with a persistent disk**. The monitor loop, Telegram long polling, in-process SSE bus, and SQLite all assume a single process. Do not enable autoscaling, and do not run multiple replicas against the same database.
+
+`BMS_ENVIRONMENT=production` enforces the public-deployment basics:
+
+- `BMS_AUTH_PASSWORD` must be set (12+ characters).
+- `BMS_TELEGRAM_CHAT_ID` must be set when a Telegram bot token is configured.
+
+Fly.io and Render configs are included. Both mount a volume at `/data` and keep SQLite there.
+
+### Fly.io
+
+[`fly.toml`](fly.toml) defines one machine, no auto-stop, a `/health` check, and a `bms_data` volume at `/data`.
+
+```bash
+fly launch --no-deploy
+fly volumes create bms_data --size 1 --region bom
+fly secrets set \
+  BMS_AUTH_PASSWORD='a-long-random-password' \
+  BMS_SESSION_SECRET="$(openssl rand -hex 32)" \
+  BMS_TELEGRAM_BOT_TOKEN='123456789:...' \
+  BMS_TELEGRAM_CHAT_ID='123456789'
+fly deploy
+fly logs
+```
+
+Change `app` and `primary_region` in `fly.toml` if needed; the volume must be in the same region as the machine. Leave the app at one machine (`fly scale count 1`). The dashboard is at `https://<app>.fly.dev`.
+
+### Render
+
+[`render.yaml`](render.yaml) defines a Docker web service with a 1 GB disk at `/data`. Persistent disks require a paid instance type (Starter or higher).
+
+1. In Render, choose **New → Blueprint** and select this repository.
+2. Set `BMS_AUTH_PASSWORD`, `BMS_TELEGRAM_BOT_TOKEN`, and `BMS_TELEGRAM_CHAT_ID` when prompted (`BMS_SESSION_SECRET` is generated).
+3. Apply the blueprint and keep the service at one instance.
+
+If you do not use Telegram, leave the token blank; the bot stays disabled.
+
+### Other hosts
+
+Any single always-on container with a volume works (Railway, a VPS, your own Docker host). Mount the volume at `/data`, set `BMS_DATABASE_PATH=/data/bms_assistant.db`, set `BMS_HOST=0.0.0.0`, and set the auth environment variables. If the platform injects `PORT`, the app honors it unless `BMS_PORT` is also set.
+
+### Why not FastAPI Cloud?
+
+FastAPI Cloud is request-driven and scales to zero on the free plan, and it does not provide a durable local disk. This app needs a process that keeps polling when no one is visiting the dashboard, exactly one replica, and persistent SQLite. Deploying there would require a Postgres adapter, a split web/worker architecture, leader election, and a shared event bus — a different design, not a config change.
+
 ## Docker
 
 ```bash
@@ -160,7 +240,7 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The compose file binds the UI to `127.0.0.1` on the host and persists SQLite data in `./data`. Set `BMS_HOST=0.0.0.0` only inside the container (the compose file does this). Do not expose the dashboard publicly without adding authentication.
+The compose file binds the UI to `127.0.0.1` on the host and persists SQLite data in `./data`. Set `BMS_HOST=0.0.0.0` only inside the container (the compose file does this). Set `BMS_AUTH_PASSWORD` before exposing the dashboard beyond localhost.
 
 ## Development
 

@@ -11,11 +11,13 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import (
     Application,
+    ApplicationHandlerStop,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -110,6 +112,34 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
+
+
+async def _require_authorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Let only the configured chat control the bot.
+
+    ``/start`` and ``/help`` stay open so the owner can discover their chat id
+    during setup. Every other update from another chat is dropped.
+    """
+    allowed_chat_id: int | None = context.application.bot_data.get("allowed_chat_id")
+    if allowed_chat_id is None:
+        return
+
+    chat = update.effective_chat
+    if chat is not None and chat.id == allowed_chat_id:
+        return
+
+    message = update.effective_message
+    text = (message.text or "").strip() if message else ""
+    command = text.split()[0].split("@", 1)[0].lower() if text.startswith("/") else ""
+    if command in {"/start", "/help"}:
+        return
+
+    if update.callback_query is not None:
+        await update.callback_query.answer("This bot is private.", show_alert=True)
+    elif message is not None:
+        await message.reply_text("This bot is private.")
+    logger.warning("Blocked Telegram update from chat %s", chat.id if chat else "unknown")
+    raise ApplicationHandlerStop
 
 
 async def jobs_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -509,7 +539,9 @@ def register_handlers(
 ) -> None:
     application.bot_data["settings"] = settings
     application.bot_data["job_manager"] = job_manager
+    application.bot_data["allowed_chat_id"] = settings.telegram_chat_id
 
+    application.add_handler(TypeHandler(Update, _require_authorized), group=-1)
     application.add_handler(CommandHandler("start", start_cmd))
     application.add_handler(CommandHandler("help", start_cmd))
     application.add_handler(CommandHandler("jobs", jobs_cmd))

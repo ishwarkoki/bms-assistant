@@ -28,6 +28,11 @@
         </span>
         <button class="icon-button" id="sound-toggle" type="button" aria-pressed="true"
                 title="Toggle the alert sound">🔔</button>
+        {% if auth_enabled %}
+        <form class="logout-form" method="post" action="/logout">
+          <button class="btn btn-ghost btn-tiny" type="submit">Sign out</button>
+        </form>
+        {% endif %}
         <button class="btn btn-primary" id="open-job-dialog" type="button">
           <span aria-hidden="true">＋</span> New watch
         </button>

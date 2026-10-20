@@ -1,0 +1,35 @@
+# Render blueprint: one Docker web service with a persistent disk.
+#
+# Persistent disks require a paid instance type (Starter or higher).
+# After creating the service, set the secret values marked `sync: false`
+# in the Render dashboard.
+
+services:
+  - type: web
+    name: bms-assistant
+    runtime: docker
+    plan: starter
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: BMS_ENVIRONMENT
+        value: production
+      - key: BMS_HOST
+        value: 0.0.0.0
+      - key: BMS_DATABASE_PATH
+        value: /data/bms_assistant.db
+      - key: BMS_TIMEZONE
+        value: Asia/Kolkata
+      - key: BMS_AUTH_PASSWORD
+        sync: false
+      - key: BMS_SESSION_SECRET
+        generateValue: true
+      - key: BMS_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: BMS_TELEGRAM_CHAT_ID
+        sync: false
+    disk:
+      name: bms-data
+      mountPath: /data
+      sizeGB: 1
