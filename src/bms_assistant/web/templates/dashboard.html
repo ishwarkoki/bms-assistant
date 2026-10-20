@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Semi-automated ticket watch</p>
+    <h1>Get the drop.<br><span>Keep the checkout.</span></h1>
+    <p>
+      Create a watch, let it poll on your schedule, and get a loud alert the moment
+      tickets look live. You still approve the payment — always.
+    </p>
+  </div>
+  <div class="hero-steps">
+    <div class="hero-step">
+      <span>01</span>
+      <p><strong>Create a watch</strong> for a venue, drop time and ticket count.</p>
+    </div>
+    <div class="hero-step">
+      <span>02</span>
+      <p><strong>Get alerted</strong> in the dashboard, by sound, and on Telegram.</p>
+    </div>
+    <div class="hero-step">
+      <span>03</span>
+      <p><strong>Hand off</strong> to the booking page and pay manually.</p>
+    </div>
+  </div>
+</section>
+
+<div id="dashboard-region">
+  {% include "partials/dashboard.html" %}
+</div>
+
+<div class="content-grid">
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Activity</h2>
+        <p class="muted">Every check, alert and handoff lands here.</p>
+      </div>
+      <span class="live-indicator"><span class="live-dot"></span> live</span>
+    </div>
+    <div id="activity-region">
+      {% include "partials/activity.html" %}
+    </div>
+  </section>
+
+  <aside class="panel side-note">
+    <h2>Guardrails</h2>
+    <ul class="check-list">
+      <li>No stored cards, CVVs or UPI PINs.</li>
+      <li>No CAPTCHA solving or anti-bot evasion.</li>
+      <li>No automated checkout or OTP handling.</li>
+      <li>Payments and seat choice stay with you.</li>
+    </ul>
+    <p class="muted small">
+      Use providers that respect the platforms you use. The reminder provider is
+      a plain scheduled alert; the mock provider is for development only.
+    </p>
+  </aside>
+</div>
+
+<dialog id="new-job-dialog" class="dialog" {% if form %}data-open="true"{% endif %}>
+  <form class="job-form" method="post" action="/jobs">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">New watch</p>
+        <h2>Track a ticket drop</h2>
+      </div>
+      <button class="icon-button" id="close-job-dialog" type="button" aria-label="Close">✕</button>
+    </div>
+
+    {% if form_error %}
+      <div class="form-error">{{ form_error }}</div>
+    {% endif %}
+
+    <div class="form-grid">
+      <label class="field field-wide">
+        <span>What are you watching?</span>
+        <input type="text" name="name" required maxlength="120"
+               placeholder="e.g. Dune: Part Three — opening night"
+               value="{{ form.get('name', '') }}">
+      </label>
+
+      <label class="field">
+        <span>Provider</span>
+        <select name="provider" id="provider-select">
+          {% for provider in providers %}
+            <option value="{{ provider.name }}"
+                    data-requires-url="{{ 'true' if provider.requires_booking_url else 'false' }}"
+                    data-description="{{ provider.description }}"
+                    {% if form.get('provider', providers[0].name) == provider.name %}selected{% endif %}>
+              {{ provider.label }}
+            </option>
+          {% endfor %}
+        </select>
+        <small class="field-hint" id="provider-hint">{{ providers[0].description }}</small>
+      </label>
+
+      <label class="field">
+        <span>Venue / platform</span>
+        <input type="text" name="venue" required maxlength="160"
+               placeholder="e.g. PVR ICON, Hyderabad"
+               value="{{ form.get('venue', '') }}">
+      </label>
+
+      <label class="field">
+        <span>Release / drop time</span>
+        <input type="datetime-local" name="release_at" id="release-at" required step="1"
+               value="{{ form.get('release_at', default_release_at) }}">
+        <button class="btn btn-ghost btn-tiny" id="quick-release" type="button">
+          set +15s (dev)
+        </button>
+      </label>
+
+      <label class="field">
+        <span>Showtime <em>optional</em></span>
+        <input type="datetime-local" name="show_at"
+               value="{{ form.get('show_at', '') }}">
+      </label>
+
+      <label class="field">
+        <span>Tickets</span>
+        <input type="number" name="quantity" min="1" max="10" step="1"
+               value="{{ form.get('quantity', '2') }}">
+      </label>
+
+      <label class="field">
+        <span>Check every (seconds)</span>
+        <input type="number" name="interval_seconds" min="{{ min_interval }}" max="3600" step="1"
+               value="{{ form.get('interval_seconds', default_interval) }}">
+      </label>
+
+      <label class="field field-wide" id="booking-url-field">
+        <span>Booking / handoff URL <em id="booking-url-required">optional for mock</em></span>
+        <input type="url" name="booking_url" id="booking-url"
+               placeholder="https://in.bookmyshow.com/..."
+               value="{{ form.get('booking_url', '') }}">
+        <small class="field-hint">
+          Where the alert should send you. Mock watches can leave this blank and
+          receive a generated demo link.
+        </small>
+      </label>
+    </div>
+
+    <label class="check-row">
+      {% set auto_start_checked = form.get('auto_start') in ('on', 'true', '1', 'yes') if form else true %}
+      <input type="checkbox" name="auto_start" {% if auto_start_checked %}checked{% endif %}>
+      <span>Start watching immediately</span>
+    </label>
+
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="cancel-job-dialog" type="button">Cancel</button>
+      <button class="btn btn-primary" type="submit">Create watch</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

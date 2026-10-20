@@ -1,0 +1,80 @@
+{% set status = job.status.value %}
+<article class="job-card status-{{ status }}"
+         data-job-id="{{ job.id }}"
+         data-job-status="{{ status }}">
+  <div class="job-card-head">
+    <div class="job-title">
+      <span class="status-badge">{{ job.status_label }}</span>
+      <span class="provider-badge">{{ job.provider }}</span>
+    </div>
+    <span class="job-id" title="Job id">{{ job.short_id }}</span>
+  </div>
+
+  <h3 class="job-name">{{ job.name }}</h3>
+  <p class="job-venue">{{ job.venue }}</p>
+
+  {% if status == 'triggered' %}
+    <div class="trigger-strip">
+      <span class="trigger-dot"></span>
+      <p>Tickets look live. Open the booking page and pay manually.</p>
+    </div>
+    {% if job.booking_url %}
+      <a class="btn btn-success btn-block" href="{{ job.booking_url }}" target="_blank" rel="noopener">
+        Open booking ↗
+      </a>
+    {% endif %}
+  {% endif %}
+
+  {% if job.error %}
+    <p class="job-error">{{ job.error }}</p>
+  {% endif %}
+
+  <dl class="job-meta">
+    <div>
+      <dt>Release</dt>
+      <dd>
+        {% if job.release_at %}
+          <span data-countdown="{{ job.release_at.isoformat() }}">{{ job.release_at|localtime }}</span>
+        {% else %}—{% endif %}
+      </dd>
+    </div>
+    <div>
+      <dt>Show</dt>
+      <dd>{{ job.show_at|localtime if job.show_at else '—' }}</dd>
+    </div>
+    <div>
+      <dt>Tickets</dt>
+      <dd>{{ job.quantity }}</dd>
+    </div>
+    <div>
+      <dt>Checks</dt>
+      <dd>{{ job.check_count }}</dd>
+    </div>
+  </dl>
+
+  <div class="job-actions">
+    {% if status == 'monitoring' %}
+      <form method="post" action="/jobs/{{ job.id }}/stop">
+        <button class="btn btn-ghost btn-small" type="submit">Pause</button>
+      </form>
+    {% elif status != 'booked' %}
+      <form method="post" action="/jobs/{{ job.id }}/start">
+        <button class="btn btn-ghost btn-small" type="submit">Start</button>
+      </form>
+    {% endif %}
+
+    <form method="post" action="/jobs/{{ job.id }}/check">
+      <button class="btn btn-ghost btn-small" type="submit">Test check</button>
+    </form>
+
+    {% if status == 'triggered' %}
+      <form method="post" action="/jobs/{{ job.id }}/booked">
+        <button class="btn btn-success btn-small" type="submit">Mark booked</button>
+      </form>
+    {% endif %}
+
+    <form method="post" action="/jobs/{{ job.id }}/delete" data-confirm="Delete this watch?">
+      <button class="btn btn-danger btn-small" type="submit">Delete</button>
+    </form>
+  </div>
+</article>

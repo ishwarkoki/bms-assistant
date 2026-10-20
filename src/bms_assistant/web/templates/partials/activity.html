@@ -1,0 +1,15 @@
+<ul class="activity-list">
+  {% for event in events %}
+    <li class="activity-item activity-{{ event.kind }}">
+      <span class="activity-dot" aria-hidden="true"></span>
+      <div class="activity-body">
+        <p>{{ event.message }}</p>
+        <time datetime="{{ event.created_at.isoformat() }}">{{ event.created_at|relative }}</time>
+      </div>
+    </li>
+  {% else %}
+    <li class="empty-activity">
+      <p>No activity yet. Start a watch and checks will show up here.</p>
+    </li>
+  {% endfor %}
+</ul>

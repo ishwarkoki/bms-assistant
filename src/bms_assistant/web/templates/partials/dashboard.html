@@ -1,0 +1,45 @@
+<section class="stats-grid" aria-label="Watch statistics">
+  <article class="stat-card">
+    <span class="stat-label">Watching</span>
+    <strong class="stat-value">{{ stats.monitoring }}</strong>
+    <span class="stat-note">active pollers</span>
+  </article>
+  <article class="stat-card stat-live">
+    <span class="stat-label">Live now</span>
+    <strong class="stat-value">{{ stats.triggered }}</strong>
+    <span class="stat-note">needs a handoff</span>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Booked</span>
+    <strong class="stat-value">{{ stats.booked }}</strong>
+    <span class="stat-note">closed out</span>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Total watches</span>
+    <strong class="stat-value">{{ stats.total }}</strong>
+    <span class="stat-note">{{ stats.stopped + stats.failed }} paused / failed</span>
+  </article>
+</section>
+
+<section class="panel jobs-panel">
+  <div class="panel-head">
+    <div>
+      <h2>Watchlist</h2>
+      <p class="muted">Status, next release and one-click handoff.</p>
+    </div>
+    <span class="count-pill">{{ jobs|length }}</span>
+  </div>
+
+  <div class="job-grid">
+    {% for job in jobs %}
+      {% include "partials/job_card.html" %}
+    {% else %}
+      <div class="empty-state">
+        <span class="empty-mark" aria-hidden="true">🕒</span>
+        <h3>No watches yet</h3>
+        <p>Create your first watch, or try the mock provider with a release a few seconds away.</p>
+        <button class="btn btn-primary" id="empty-new-job" type="button">Create a watch</button>
+      </div>
+    {% endfor %}
+  </div>
+</section>
