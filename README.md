@@ -175,6 +175,8 @@ uv run pre-commit install
 
 The pre-commit suite includes Gitleaks, `detect-private-key`, and a file guard that blocks `.env`, local `data/`, databases, and key material. Gitleaks also runs over the full git history in CI, and GitHub secret scanning plus push protection are enabled for the repository. Install the hooks once with `uv run pre-commit install`.
 
+The Gitleaks hook is built by pre-commit and needs a Go toolchain on the first run. CI downloads a pinned Gitleaks release, so it does not need Go.
+
 If a secret is ever committed, rotate it immediately. Removing it in a later commit does not remove it from git history or from forks and caches. See [`SECURITY.md`](SECURITY.md).
 
 ## Scope and responsible use
