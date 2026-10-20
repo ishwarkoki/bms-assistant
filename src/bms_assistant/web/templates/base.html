@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v={{ asset_version }}">
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -52,6 +52,6 @@
   </div>
 
   <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
-  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+  <script src="{{ url_for('static', path='app.js') }}?v={{ asset_version }}" defer></script>
 </body>
 </html>

@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <title>Sign in · {{ app_name }}</title>
   <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v={{ asset_version }}">
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>

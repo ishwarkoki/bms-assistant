@@ -82,6 +82,18 @@ def _short_date(value: date | None) -> str:
     return value.strftime("%a, %d %b %Y") if value else ""
 
 
+def _asset_version() -> str:
+    """Bust browser caches when the dashboard CSS or JS changes."""
+    static_dir = Path(__file__).parent / "static"
+    stamps: list[int] = []
+    for name in ("app.css", "app.js"):
+        try:
+            stamps.append(int((static_dir / name).stat().st_mtime))
+        except OSError:
+            continue
+    return str(max(stamps, default=1))
+
+
 def _redirect(path: str, **params: str) -> RedirectResponse:
     query = urlencode({key: value for key, value in params.items() if value})
     url = f"{path}?{query}" if query else path
@@ -111,6 +123,7 @@ def create_web_app(
     templates.env.filters["shortdate"] = _short_date
     templates.env.globals.update(
         app_name=settings.app_name,
+        asset_version=_asset_version(),
         timezone=settings.timezone,
         telegram_ready=settings.telegram_ready,
         auth_enabled=settings.auth_enabled,
