@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Refuse to stage files that should never enter a public repository.
+# Refuse to stage files that should never enter a public repository: .env files,
+# anything under data/ (SQLite database, Playwright browser profile with session
+# cookies, recon captures), and key material.
 
 set -euo pipefail
 

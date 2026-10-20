@@ -12,6 +12,9 @@ Include the affected version, reproduction steps, and impact.
 - `.env.example` is the only env file that may be committed.
 - The pre-commit suite runs Gitleaks, `detect-private-key`, and a file guard
   that blocks `.env`, local `data/`, databases, and key material.
+- The Playwright browser profile in `data/browser-profile/` contains live
+  session cookies. Treat it like a password; it is gitignored and blocked by
+  the guard.
 - CI runs Gitleaks against the full git history on every push and pull request.
 - GitHub secret scanning and push protection are enabled for the repository.
 - Public deployments must set `BMS_AUTH_PASSWORD` and, when Telegram is enabled,

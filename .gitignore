@@ -10,7 +10,8 @@ __pycache__/
 .mypy_cache/
 .coverage
 
-# App data
+# App data: SQLite DB, Playwright browser profile (session cookies), recon captures,
+# debug dumps. Never commit anything under data/ — the pre-commit guard blocks it.
 data/
 *.db
 *.db-shm

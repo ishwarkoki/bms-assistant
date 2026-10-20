@@ -1,8 +1,10 @@
 # Ticket Watch
 
-A local-first, semi-automated ticket **watchlist** with a web dashboard and a Telegram bot. It checks a release window, alerts you loudly when tickets look live, and hands you the booking page. You choose the seats and approve the payment.
+A local-first ticket **watchlist** with a web dashboard and a Telegram bot. It checks a release window, alerts you loudly when tickets look live, and hands you the booking page. You choose the seats and approve the payment.
 
-It is deliberately **not** a checkout bot. There is no anti-bot evasion, CAPTCHA solving, stored card/UPI data, or automated OTP handling.
+An **opt-in** auto-cart module is being added incrementally: browser automation that can score, select, and temporarily hold seats, then stop at the payment screen and wait for you. See [BMS auto-cart (opt-in)](#bms-auto-cart-opt-in).
+
+It never completes a payment. There is no anti-bot evasion, CAPTCHA solving, stored card/UPI data, or automated OTP handling — and that will not change.
 
 ## What it does
 
@@ -23,7 +25,7 @@ It is deliberately **not** a checkout bot. There is no anti-bot evasion, CAPTCHA
 | Web | FastAPI + Jinja + vanilla JS | No SPA build step; server-rendered job cards and a tiny SSE client |
 | Storage | SQLite via `aiosqlite` | Zero external services; easy local development |
 | Bot | `python-telegram-bot` v21 | Async polling, conversations, inline handoff buttons |
-| Scope | Watch + alert + manual checkout | Keeps payments and platform rules with the user |
+| Scope | Watch + alert; opt-in seat hold with manual payment | Payments stay with you; no evasion or payment automation |
 
 ## Quick start
 
@@ -110,6 +112,58 @@ BMS_AUTH_PASSWORD=a-long-random-password
 
 The URL changes every time the tunnel restarts. Tailscale Funnel (`tailscale funnel 8765`) is the alternative if you want a stable `*.ts.net` address.
 
+## BMS auto-cart (opt-in)
+
+> **Read this first.** This module automates a real checkout flow on BookMyShow
+> with your own account. That violates BookMyShow's terms of service and can get
+> your account suspended. It is **off by default**, it **never pays** — the flow
+> stops at the payment-options screen and you complete every payment by hand —
+> and it has no stealth or evasion features. Use it only if you accept those risks.
+
+The module is landing in stages:
+
+| Stage | Status |
+| --- | --- |
+| Recon tooling (capture what BMS actually sends) | available now |
+| Seat scoring (`services/seat_preferences.py`) | available now |
+| Availability watcher + auto-cart + hold handoff | in progress, gated behind `BMS_AUTOCART_ENABLED` (default `false`) when it lands |
+
+### Setup
+
+```bash
+uv sync --extra bms
+uv run playwright install chromium
+```
+
+### Step 1: log in once, by hand
+
+```bash
+uv run python scripts/bms-login.py
+```
+
+A Chromium window opens with a dedicated profile in `data/browser-profile/`. Log in to BMS there (finish any OTP), then press Enter. The profile — including its session cookies — stays on this machine, is gitignored, and is blocked by the secret guard. The scripts never see your password.
+
+### Step 2: capture a recon session
+
+```bash
+uv run python scripts/bms-recon.py --url "https://in.bookmyshow.com/explore/home/<city>"
+```
+
+The browser opens on that page. Walk to a real show's seat-selection page, then to the payment-options screen (do not pay), and watch the terminal:
+
+- every JSON XHR/fetch response is saved under `data/bms-recon/<stamp>/json/`,
+- a screenshot is saved on each navigation,
+- type `s` for an extra screenshot, `d` for a DOM snapshot, `q` to quit and write `index.json`.
+
+Headers and cookies are never captured, and obvious secret/PII keys (tokens, emails, phones, UPI ids) are replaced with `[REDACTED]` — best effort, so review anything before sharing it.
+
+### Ground rules that will not change
+
+- Payment is always manual: no UPI, card, or gift-voucher automation of any kind.
+- No stealth, fingerprint spoofing, CAPTCHA solving, or proxy rotation.
+- Login is manual and one-time; credentials and PINs are never stored.
+- One hold at a time, one account, polite polling with backoff.
+
 ## Configuration
 
 All settings use the `BMS_` prefix and are loaded from `.env`.
@@ -164,7 +218,8 @@ src/bms_assistant/
 ├── ports/                    # provider, repository, notifier protocols
 ├── services/
 │   ├── job_manager.py        # monitoring loop + state transitions
-│   └── event_bus.py          # in-process SSE fan-out
+│   ├── event_bus.py          # in-process SSE fan-out
+│   └── seat_preferences.py   # pure seat scoring for the opt-in auto-cart flow
 ├── adapters/
 │   ├── providers/            # mock + scheduled-reminder providers
 │   ├── storage/sqlite.py     # repository adapter
@@ -287,6 +342,8 @@ uv run pre-commit install
 
 `uv run uvicorn bms_assistant.main:create_app --factory --reload` gives hot reload. Use the normal `uv run python -m bms_assistant` entrypoint for the Telegram bot.
 
+Working on the opt-in BMS module? `uv sync --extra bms` installs Playwright and `uv run playwright install chromium` downloads the browser. Only the scripts under `scripts/` and the future auto-cart adapter need it; the base install and Docker image stay slim.
+
 The pre-commit suite includes Gitleaks, `detect-private-key`, and a file guard that blocks `.env`, local `data/`, databases, and key material. Gitleaks also runs over the full git history in CI, and GitHub secret scanning plus push protection are enabled for the repository. Install the hooks once with `uv run pre-commit install`.
 
 The Gitleaks hook is built by pre-commit and needs a Go toolchain on the first run. CI downloads a pinned Gitleaks release, so it does not need Go.
@@ -295,4 +352,9 @@ If a secret is ever committed, rotate it immediately. Removing it in a later com
 
 ## Scope and responsible use
 
-This project is an alerting and handoff assistant. It does not bypass bot protections, solve CAPTCHAs, automate logins, or complete payments. Use it only with services and workflows you are allowed to automate, and follow the terms of the platforms you use. Payments always require your explicit action.
+This project alerts you, and — with the opt-in auto-cart module — can drive a browser to select and hold seats. It does not bypass bot protections, solve CAPTCHAs, automate logins (the browser login is manual and one-time), store payment credentials, or complete payments.
+
+Two hard rules:
+
+- **Payments stay manual.** UPI and card payments require your approval in your own app by design; nothing here will ever try to script that, and any tool claiming otherwise should not be trusted with your money.
+- **You carry the risk.** The auto-cart module operates against BookMyShow's terms of service and can get your account suspended. Use the project only with services and workflows you are allowed to automate.
