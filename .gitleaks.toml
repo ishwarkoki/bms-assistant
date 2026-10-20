@@ -1,0 +1,12 @@
+title = "Ticket Watch secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholders that are not real credentials"
+regexes = [
+  '''replace-me''',
+  '''123456789:replace-me''',
+  '''123456:ABCDEF''',
+]
