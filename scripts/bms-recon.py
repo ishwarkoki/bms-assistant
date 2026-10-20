@@ -3,8 +3,10 @@
 
 Records JSON XHR/fetch responses (headers and cookies are never captured),
 screenshots every navigation, and lets you save extra screenshots or DOM
-snapshots from this terminal. Everything lands in ``data/bms-recon/<stamp>/``,
-which is gitignored. Key-name redaction is best effort: review before sharing.
+snapshots from this terminal. Console messages, page errors, POST bodies
+(redacted), and the browser's automation flags are recorded too. Everything
+lands in ``data/bms-recon/<stamp>/``, which is gitignored. Key-name redaction
+is best effort: review before sharing.
 
 Usage:
     uv run python scripts/bms-recon.py --url "https://in.bookmyshow.com/..."
@@ -33,7 +35,7 @@ from urllib.parse import urlsplit
 from bms_common import PROFILE_DIR, RECON_DIR, import_async_playwright
 
 if TYPE_CHECKING:
-    from playwright.async_api import Frame, Page, Response
+    from playwright.async_api import ConsoleMessage, Error, Frame, Page, Request, Response
 
 MAX_BODY_BYTES = 3 * 1024 * 1024
 SENSITIVE_KEY = re.compile(
@@ -41,6 +43,10 @@ SENSITIVE_KEY = re.compile(
     re.IGNORECASE,
 )
 SLUG = re.compile(r"[^a-zA-Z0-9]+")
+FORM_SECRET = re.compile(
+    r"((?:token|session|auth|password|otp|email|mobile|phone|card|upi|pin)[^=&#]*=)[^&#]*",
+    re.IGNORECASE,
+)
 
 
 def redact(value: Any) -> Any:
@@ -55,6 +61,11 @@ def redact(value: Any) -> Any:
     if isinstance(value, list):
         return [redact(item) for item in value]
     return value
+
+
+def redact_form(body: str) -> str:
+    """Mask sensitive form values while keeping operation names readable."""
+    return FORM_SECRET.sub(r"\1[REDACTED]", body)
 
 
 def slugify(url: str) -> str:
@@ -79,6 +90,8 @@ class Recorder:
         for directory in (self.json_dir, self.shots_dir, self.dom_dir):
             directory.mkdir(parents=True, exist_ok=True)
         self.index: list[dict[str, Any]] = []
+        self.requests_log = out_dir / "requests.log"
+        self.console_log = out_dir / "console.log"
         self._json_counter = count(1)
         self._shot_counter = count(1)
         self._dom_counter = count(1)
@@ -135,6 +148,51 @@ class Recorder:
     def write_index(self) -> None:
         index_file = self.out_dir / "index.json"
         index_file.write_text(json.dumps(self.index, indent=2), encoding="utf-8")
+
+    def on_console(self, message: ConsoleMessage) -> None:
+        location = message.location or {}
+        where = f"{location.get('url', '')}:{location.get('lineNumber', '')}"
+        prefix = datetime.now().strftime("%H:%M:%S")
+        line = f"[{prefix}] {message.type}: {message.text} ({where})"
+        self._append(self.console_log, line)
+        if message.type in {"error", "warning"}:
+            print(line)
+
+    def on_page_error(self, error: Error) -> None:
+        line = f"[{datetime.now().strftime('%H:%M:%S')}] pageerror: {error}"
+        self._append(self.console_log, line)
+        print(line)
+
+    def on_request(self, request: Request) -> None:
+        try:
+            if request.method != "POST" or request.resource_type not in {"xhr", "fetch"}:
+                return
+            if "bookmyshow.com" not in request.url:
+                return
+            body = redact_form(request.post_data or "")
+            prefix = datetime.now().strftime("%H:%M:%S")
+            line = f"[{prefix}] POST {request.url}\n  body: {body[:4000]}"
+            self._append(self.requests_log, line)
+        except Exception as error:
+            self._append(self.requests_log, f"request capture failed: {error}")
+
+    async def write_environment(self, page: Page) -> None:
+        try:
+            payload: dict[str, Any] = {
+                "url": page.url,
+                "user_agent": await page.evaluate("navigator.userAgent"),
+                "webdriver": await page.evaluate("navigator.webdriver"),
+                "viewport": page.viewport_size,
+                "captured_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        except Exception as error:
+            payload = {"error": str(error)}
+        (self.out_dir / "env.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    @staticmethod
+    def _append(path: Path, line: str) -> None:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
 
     def print_summary(self) -> None:
         captured = [entry for entry in self.index if "file" in entry]
@@ -205,6 +263,9 @@ async def run(url: str, out_dir: Path) -> int:
         try:
             page = context.pages[0] if context.pages else await context.new_page()
             page.on("response", recorder.on_response)
+            page.on("console", recorder.on_console)
+            page.on("pageerror", recorder.on_page_error)
+            page.on("request", recorder.on_request)
 
             async def on_navigation(frame: Frame) -> None:
                 if frame == page.main_frame:
@@ -216,6 +277,7 @@ async def run(url: str, out_dir: Path) -> int:
             print("Walk: let the page load, then showtimes -> seat map -> payment options.")
             print_commands()
             print("Headers and cookies are never captured. Redaction is best effort.")
+            print("Also recording: console.log, requests.log (POST bodies), env.json.")
 
             try:
                 await page.goto(url)
@@ -223,6 +285,8 @@ async def run(url: str, out_dir: Path) -> int:
                 print(f"Could not open {url}: {error}")
                 print("You can navigate manually in the browser window.")
 
+            await page.wait_for_timeout(2000)
+            await recorder.write_environment(page)
             await command_loop(page, recorder)
         finally:
             await context.close()

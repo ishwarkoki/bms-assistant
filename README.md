@@ -153,6 +153,7 @@ The browser opens on that page. Walk to a real show's seat-selection page, then 
 
 - every JSON XHR/fetch response is saved under `data/bms-recon/<stamp>/json/`,
 - a screenshot is saved on each navigation,
+- console messages and page errors go to `console.log`, bookmyshow POST bodies (redacted) to `requests.log`, and browser automation flags to `env.json`,
 - type `s` for an extra screenshot, `d` for a DOM snapshot, `q` to quit and write `index.json`.
 
 Headers and cookies are never captured, and obvious secret/PII keys (tokens, emails, phones, UPI ids) are replaced with `[REDACTED]` — best effort, so review anything before sharing it.
