@@ -12,7 +12,15 @@
   const bookingUrlInput = $("#booking-url");
   const bookingUrlRequired = $("#booking-url-required");
   const releaseInput = $("#release-at");
+  const releaseInputField = $("#release-at-field");
   const quickRelease = $("#quick-release");
+  const bmsInput = $("#bms-url");
+  const bmsPreview = $("#bms-preview");
+  const showtimeMode = $("#showtime-mode");
+  const exactTimeField = $("#exact-time-field");
+  const windowStartField = $("#window-start-field");
+  const windowEndField = $("#window-end-field");
+  const showDateInput = $("#show-date-input");
 
   let audioContext = null;
   let soundEnabled = localStorage.getItem("ticket-watch-sound") !== "off";
@@ -57,7 +65,7 @@
     const requiresUrl = option.dataset.requiresUrl === "true";
     if (providerHint) providerHint.textContent = option.dataset.description || "";
     if (bookingUrlInput) {
-      bookingUrlInput.required = requiresUrl;
+      bookingUrlInput.required = requiresUrl && !(bmsInput && bmsInput.value.trim());
       bookingUrlInput.placeholder = requiresUrl
         ? "https://in.bookmyshow.com/..."
         : "Optional — a demo link is generated";
@@ -68,6 +76,7 @@
   }
 
   providerSelect?.addEventListener("change", updateProviderFields);
+  bmsInput?.addEventListener("input", updateProviderFields);
   updateProviderFields();
 
   /* ------------------------------------------------------------ release shortcut */
@@ -91,9 +100,207 @@
 
   quickRelease?.addEventListener("click", () => {
     if (!releaseInput) return;
+    const atMode = $('input[name="release_mode"][value="at"]');
+    if (atMode) {
+      atMode.checked = true;
+      updateReleaseFields();
+    }
     releaseInput.value = toLocalInput(new Date(Date.now() + 15000));
     releaseInput.focus();
     releaseInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  /* ------------------------------------------------------------ BMS link parser */
+
+  function humanizeSlug(slug) {
+    if (!slug) return "";
+    const small = new Set(["a", "an", "and", "at", "for", "in", "of", "on", "the", "to"]);
+    return decodeURIComponent(slug)
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .map((word, index) => {
+        if (index && small.has(word.toLowerCase())) return word.toLowerCase();
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
+  }
+
+  function cityLabel(city) {
+    const labels = {
+      hyd: "Hyderabad",
+      blr: "Bengaluru",
+      bom: "Mumbai",
+      del: "Delhi",
+      che: "Chennai",
+      kol: "Kolkata",
+      pnq: "Pune",
+    };
+    const key = String(city || "").toLowerCase();
+    return labels[key] || key.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function parseBmsUrl(raw) {
+    if (!raw) return null;
+    let url;
+    try {
+      url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    } catch (error) {
+      return null;
+    }
+    if (!/(^|\.)bookmyshow\.com$/i.test(url.hostname)) return null;
+    const path = url.pathname.replace(/\/+$/, "");
+
+    let match = path.match(
+      /^\/movies\/([^/]+)\/seat-layout\/([A-Za-z]{2,4}\d{4,})\/([A-Za-z0-9]+)\/(\d+)\/(\d{8})$/
+    );
+    if (match) {
+      return {
+        kind: "seat-layout",
+        city: decodeURIComponent(match[1]).toLowerCase(),
+        event: match[2].toUpperCase(),
+        venue: match[3].toUpperCase(),
+        session: match[4],
+        date: match[5],
+        slug: "",
+      };
+    }
+
+    match = path.match(
+      /^\/movies\/([^/]+)\/([^/]+)\/buytickets\/([A-Za-z]{2,4}\d{4,})\/(\d{8})$/
+    );
+    if (match) {
+      return {
+        kind: "showtimes",
+        city: decodeURIComponent(match[1]).toLowerCase(),
+        slug: decodeURIComponent(match[2]),
+        event: match[3].toUpperCase(),
+        venue: "",
+        session: "",
+        date: match[4],
+      };
+    }
+
+    match = path.match(/^\/movies\/([^/]+)\/([^/]+)\/([A-Za-z]{2,4}\d{4,})$/);
+    if (match) {
+      return {
+        kind: "movie",
+        city: decodeURIComponent(match[1]).toLowerCase(),
+        slug: decodeURIComponent(match[2]),
+        event: match[3].toUpperCase(),
+        venue: "",
+        session: "",
+        date: "",
+      };
+    }
+    return null;
+  }
+
+  function formatBmsDate(value) {
+    if (!value || value.length !== 8) return "";
+    const year = value.slice(0, 4);
+    const month = value.slice(4, 6);
+    const day = value.slice(6, 8);
+    const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
+
+  function fillIfEmpty(selector, value) {
+    const element = $(selector);
+    if (!element || !value) return;
+    if (!element.value.trim()) element.value = value;
+  }
+
+  function setField(selector, value) {
+    const element = $(selector);
+    if (element && value) element.value = value;
+  }
+
+  function updateBmsPreview() {
+    if (!bmsInput) return;
+    const parsed = parseBmsUrl(bmsInput.value.trim());
+    if (!parsed) {
+      if (bmsPreview) bmsPreview.hidden = true;
+      return;
+    }
+    if (bmsPreview) bmsPreview.hidden = false;
+    const movie = parsed.slug ? humanizeSlug(parsed.slug) : "—";
+    const city = cityLabel(parsed.city);
+    const showDate = formatBmsDate(parsed.date);
+    const dateValue = parsed.date
+      ? `${parsed.date.slice(0, 4)}-${parsed.date.slice(4, 6)}-${parsed.date.slice(6, 8)}`
+      : "";
+
+    $("#preview-movie").textContent = movie || "—";
+    $("#preview-city").textContent = city || "—";
+    $("#preview-event").textContent = parsed.event || "—";
+    $("#preview-venue").textContent = parsed.venue || "—";
+    $("#preview-date").textContent = showDate || "—";
+    $("#preview-session").textContent = parsed.session || "—";
+
+    setField("#movie-id-input", parsed.event);
+    if (parsed.venue) setField("#venue-id-input", parsed.venue);
+    fillIfEmpty("#city-input", parsed.city);
+    if (parsed.venue) fillIfEmpty("#venue-input", parsed.venue);
+    else fillIfEmpty("#venue-input", `Any theatre in ${city}`);
+    if (dateValue) fillIfEmpty("#show-date-input", dateValue);
+    if (parsed.slug) fillIfEmpty("#job-name", humanizeSlug(parsed.slug));
+  }
+
+  bmsInput?.addEventListener("input", updateBmsPreview);
+  bmsInput?.addEventListener("change", updateBmsPreview);
+  updateBmsPreview();
+
+  $("#bms-example")?.addEventListener("click", () => {
+    if (!bmsInput) return;
+    bmsInput.value =
+      "https://in.bookmyshow.com/movies/hyderabad/seat-layout/ET00521930/ALUC/6296/20261022";
+    bmsInput.dispatchEvent(new Event("input", { bubbles: true }));
+    bmsInput.focus();
+  });
+
+  /* ------------------------------------------------------------ showtime / release modes */
+
+  function updateShowtimeFields() {
+    const mode = showtimeMode?.value || "any";
+    if (exactTimeField) exactTimeField.hidden = mode !== "exact";
+    if (windowStartField) windowStartField.hidden = mode !== "window";
+    if (windowEndField) windowEndField.hidden = mode !== "window";
+
+    const exactInput = $("#exact-time-field input");
+    const startInput = $("#window-start-field input");
+    const endInput = $("#window-end-field input");
+    if (exactInput) exactInput.required = mode === "exact";
+    if (startInput) startInput.required = mode === "window";
+    if (endInput) endInput.required = mode === "window";
+    if (showDateInput) showDateInput.required = mode === "exact";
+  }
+
+  function updateReleaseFields() {
+    const selected = $('input[name="release_mode"]:checked');
+    const startNow = selected?.value === "now";
+    if (releaseInputField) releaseInputField.hidden = startNow;
+    if (releaseInput) releaseInput.required = !startNow;
+  }
+
+  showtimeMode?.addEventListener("change", updateShowtimeFields);
+  $$('input[name="release_mode"]').forEach((radio) => {
+    radio.addEventListener("change", updateReleaseFields);
+  });
+  updateShowtimeFields();
+  updateReleaseFields();
+
+  dialog?.querySelector("form")?.addEventListener("submit", () => {
+    if (bookingUrlInput && !bookingUrlInput.value.trim() && bmsInput?.value.trim()) {
+      bookingUrlInput.value = bmsInput.value.trim();
+    }
   });
 
   /* ------------------------------------------------------------ sound */

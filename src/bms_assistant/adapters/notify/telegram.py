@@ -43,14 +43,52 @@ class TelegramNotifier:
                     f"<b>Tickets:</b> {job.quantity}",
                 ]
             )
+            if job.movie_id or job.venue_id:
+                codes = " · ".join(
+                    part
+                    for part in (
+                        f"event <code>{escape(job.movie_id)}</code>" if job.movie_id else "",
+                        f"venue <code>{escape(job.venue_id)}</code>" if job.venue_id else "",
+                    )
+                    if part
+                )
+                lines.append(f"<b>BMS:</b> {codes}")
+            if job.show_date:
+                lines.append(f"<b>Show date:</b> {job.show_date.strftime('%a, %d %b %Y')}")
+            if job.show_at:
+                show = format_local(job.show_at, self._tz) if self._tz else job.show_at
+                lines.append(f"<b>Show:</b> {escape(str(show))}")
+            elif job.has_show_window:
+                start = job.window_start.strftime("%I:%M %p").lstrip("0")
+                end = job.window_end.strftime("%I:%M %p").lstrip("0")
+                lines.append(f"<b>Show window:</b> {escape(start)} - {escape(end)}")
+            if job.seat_prefs.get("category"):
+                lines.append(f"<b>Seat category:</b> {escape(str(job.seat_prefs['category']))}")
+            if job.seat_prefs.get("max_price"):
+                lines.append(f"<b>Max price:</b> ₹{job.seat_prefs['max_price']}")
             if job.release_at:
                 release = format_local(job.release_at, self._tz) if self._tz else job.release_at
                 lines.append(f"<b>Release:</b> {escape(str(release))}")
-            lines.append(f"<b>ID:</b> <code>{job.short_id}</code>")
+            lines.extend(
+                [
+                    f"<b>ID:</b> <code>{job.short_id}</code>",
+                    "",
+                    "Open the link, choose seats, and pay in BMS. "
+                    "Never share an OTP, CVV, or UPI PIN.",
+                ]
+            )
 
         buttons: list[list[InlineKeyboardButton]] = []
         if notification.url:
-            buttons.append([InlineKeyboardButton("Open booking ↗", url=notification.url)])
+            is_bms = "bookmyshow.com" in notification.url
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        "Open BMS seats ↗" if is_bms else "Open booking ↗",
+                        url=notification.url,
+                    )
+                ]
+            )
         if job:
             buttons.append(
                 [

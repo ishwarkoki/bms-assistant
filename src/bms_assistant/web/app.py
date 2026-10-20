@@ -9,7 +9,7 @@ import secrets
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import asdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -59,12 +59,27 @@ class JobCreateRequest(BaseModel):
     booking_url: str | None = None
     interval_seconds: int | None = Field(None, ge=1)
     auto_start: bool = True
+    movie_id: str | None = None
+    venue_id: str | None = None
+    city: str | None = None
+    show_date: date | None = None
+    window_start: time | None = None
+    window_end: time | None = None
+    seat_prefs: dict[str, Any] | None = None
 
 
 def _as_utc(value: datetime, tz: Any) -> datetime:
     if value.tzinfo is None:
         value = value.replace(tzinfo=tz)
     return value.astimezone(UTC)
+
+
+def _clock(value: time | None) -> str:
+    return value.strftime("%I:%M %p").lstrip("0") if value else ""
+
+
+def _short_date(value: date | None) -> str:
+    return value.strftime("%a, %d %b %Y") if value else ""
 
 
 def _redirect(path: str, **params: str) -> RedirectResponse:
@@ -92,6 +107,8 @@ def create_web_app(
     )
     templates.env.filters["localinput"] = lambda value: format_local_input(value, settings.tz)
     templates.env.filters["relative"] = format_relative
+    templates.env.filters["clock"] = _clock
+    templates.env.filters["shortdate"] = _short_date
     templates.env.globals.update(
         app_name=settings.app_name,
         timezone=settings.timezone,
@@ -242,6 +259,14 @@ def create_web_app(
             context={"request": request, "events": events},
         )
 
+    @app.get("/guide", response_class=HTMLResponse)
+    async def guide(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="guide.html",
+            context={"request": request},
+        )
+
     @app.post("/jobs")
     async def create_job(request: Request) -> Response:
         form = await request.form()
@@ -264,6 +289,13 @@ def create_web_app(
                 interval_seconds=parsed.interval_seconds,
                 auto_start=parsed.auto_start,
                 chat_id=settings.telegram_chat_id,
+                movie_id=parsed.movie_id,
+                venue_id=parsed.venue_id,
+                city=parsed.city,
+                show_date=parsed.show_date,
+                window_start=parsed.window_start,
+                window_end=parsed.window_end,
+                seat_prefs=parsed.seat_prefs,
             )
         except (ValueError, JobNotFoundError) as exc:
             return await render_dashboard(request, error=str(exc), form=data, status_code=400)
@@ -333,6 +365,13 @@ def create_web_app(
                 interval_seconds=payload.interval_seconds,
                 auto_start=payload.auto_start,
                 chat_id=settings.telegram_chat_id,
+                movie_id=payload.movie_id,
+                venue_id=payload.venue_id,
+                city=payload.city,
+                show_date=payload.show_date,
+                window_start=payload.window_start,
+                window_end=payload.window_end,
+                seat_prefs=payload.seat_prefs,
             )
         except (ValueError, JobNotFoundError) as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)

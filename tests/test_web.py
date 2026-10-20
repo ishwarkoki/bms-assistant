@@ -46,6 +46,8 @@ async def test_dashboard_and_create_job(tmp_path):
         response = await client.get("/")
         assert response.status_code == 200
         assert "Watchlist" in response.text
+        assert 'value="reminder"' in response.text
+        assert "Scheduled reminder" in response.text
 
         release = (datetime.now(UTC) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M")
         payload = {
@@ -90,6 +92,88 @@ async def test_dashboard_and_create_job(tmp_path):
         )
         assert api_created.status_code == 201
         assert api_created.json()["status"] == "scheduled"
+
+    await manager.shutdown()
+
+
+async def test_bms_link_form_fills_codes_and_window(tmp_path):
+    settings = Settings(
+        database_path=tmp_path / "bms-web.db",
+        telegram_enabled=False,
+        timezone="UTC",
+        default_check_interval_seconds=2,
+        min_check_interval_seconds=2,
+        _env_file=None,
+    )
+    repository = SQLiteJobRepository(settings.database_path)
+    await repository.init()
+    providers = build_default_registry()
+    manager = JobManager(
+        repository=repository,
+        providers=providers,
+        settings=settings,
+        event_bus=EventBus(),
+    )
+    app = create_web_app(
+        settings=settings,
+        job_manager=manager,
+        repository=repository,
+        providers=providers,
+        event_bus=EventBus(),
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        guide = await client.get("/guide")
+        assert guide.status_code == 200
+        assert "How to add a BMS watch" in guide.text
+        assert "ET00521930" in guide.text
+
+        payload = {
+            "bms_url": (
+                "https://in.bookmyshow.com/movies/hyderabad/seat-layout/"
+                "ET00521930/ALUC/6296/20261022"
+            ),
+            "name": "Jailer 2",
+            "provider": "reminder",
+            "release_mode": "now",
+            "showtime_mode": "window",
+            "window_start": "18:00",
+            "window_end": "23:30",
+            "quantity": "2",
+            "seat_category": "GOLD",
+            "seat_max_price": "350",
+            "seat_zone": "center",
+            "seats_together": "on",
+            "interval_seconds": "2",
+        }
+        created = await client.post(
+            "/jobs",
+            content=urlencode(payload),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            follow_redirects=False,
+        )
+        assert created.status_code == 303
+
+        jobs = await client.get("/api/jobs")
+        assert jobs.status_code == 200
+        job = jobs.json()["jobs"][0]
+        assert job["name"] == "Jailer 2"
+        assert job["provider"] == "reminder"
+        assert job["movie_id"] == "ET00521930"
+        assert job["venue_id"] == "ALUC"
+        assert job["city"] == "hyderabad"
+        assert job["show_date"] == "2026-10-22"
+        assert job["window_start"] == "18:00:00"
+        assert job["window_end"] == "23:30:00"
+        assert job["booking_url"].endswith("/ALUC/6296/20261022")
+        assert job["seat_prefs"] == {
+            "category": "GOLD",
+            "max_price": 350,
+            "zone": "center",
+            "need_adjacent": True,
+        }
+        assert job["status"] == "scheduled"
 
     await manager.shutdown()
 

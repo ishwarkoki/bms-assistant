@@ -5,13 +5,24 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
 
 from bms_assistant.domain.models import Job, JobEvent, JobStatus
+
+# Columns added after the first MVP schema. init() applies these to an existing
+# local database so users do not have to delete their watches.
+_MIGRATIONS = {
+    "movie_id": "TEXT",
+    "venue_id": "TEXT",
+    "city": "TEXT",
+    "show_date": "TEXT",
+    "window_start": "TEXT",
+    "window_end": "TEXT",
+}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -26,6 +37,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     show_at TEXT,
     release_at TEXT,
     booking_url TEXT,
+    movie_id TEXT,
+    venue_id TEXT,
+    city TEXT,
+    show_date TEXT,
+    window_start TEXT,
+    window_end TEXT,
     config TEXT NOT NULL DEFAULT '{}',
     chat_id INTEGER,
     last_checked_at TEXT,
@@ -64,6 +81,22 @@ def _dt_to_text(value: datetime | None) -> str | None:
     return value.astimezone(UTC).isoformat() if value is not None else None
 
 
+def _date_to_text(value: date | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _time_to_text(value: time | None) -> str | None:
+    return value.isoformat(timespec="minutes") if value is not None else None
+
+
+def _text_to_date(value: str | None) -> date | None:
+    return date.fromisoformat(value) if value else None
+
+
+def _text_to_time(value: str | None) -> time | None:
+    return time.fromisoformat(value) if value else None
+
+
 def _text_to_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -95,6 +128,12 @@ def _row_to_job(row: aiosqlite.Row) -> Job:
         error=row["error"],
         check_count=row["check_count"],
         error_count=row["error_count"],
+        movie_id=row["movie_id"],
+        venue_id=row["venue_id"],
+        city=row["city"],
+        show_date=_text_to_date(row["show_date"]),
+        window_start=_text_to_time(row["window_start"]),
+        window_end=_text_to_time(row["window_end"]),
     )
 
 
@@ -127,7 +166,15 @@ class SQLiteJobRepository:
         async with self._connect() as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.executescript(SCHEMA)
+            await self._ensure_columns(db)
             await db.commit()
+
+    async def _ensure_columns(self, db: aiosqlite.Connection) -> None:
+        cursor = await db.execute("PRAGMA table_info(jobs)")
+        existing = {row["name"] for row in await cursor.fetchall()}
+        for column, column_type in _MIGRATIONS.items():
+            if column not in existing:
+                await db.execute(f"ALTER TABLE jobs ADD COLUMN {column} {column_type}")
 
     async def add_job(self, job: Job) -> None:
         async with self._connect() as db:
@@ -135,9 +182,10 @@ class SQLiteJobRepository:
                 """
                 INSERT INTO jobs (
                     id, name, provider, venue, quantity, status, created_at, updated_at,
-                    show_at, release_at, booking_url, config, chat_id, last_checked_at,
+                    show_at, release_at, booking_url, movie_id, venue_id, city, show_date,
+                    window_start, window_end, config, chat_id, last_checked_at,
                     triggered_at, error, check_count, error_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.id,
@@ -151,6 +199,12 @@ class SQLiteJobRepository:
                     _dt_to_text(job.show_at),
                     _dt_to_text(job.release_at),
                     job.booking_url,
+                    job.movie_id,
+                    job.venue_id,
+                    job.city,
+                    _date_to_text(job.show_date),
+                    _time_to_text(job.window_start),
+                    _time_to_text(job.window_end),
                     _json(job.config),
                     job.chat_id,
                     _dt_to_text(job.last_checked_at),
@@ -169,8 +223,10 @@ class SQLiteJobRepository:
                 UPDATE jobs SET
                     name = ?, provider = ?, venue = ?, quantity = ?, status = ?,
                     created_at = ?, updated_at = ?, show_at = ?, release_at = ?,
-                    booking_url = ?, config = ?, chat_id = ?, last_checked_at = ?,
-                    triggered_at = ?, error = ?, check_count = ?, error_count = ?
+                    booking_url = ?, movie_id = ?, venue_id = ?, city = ?, show_date = ?,
+                    window_start = ?, window_end = ?, config = ?, chat_id = ?,
+                    last_checked_at = ?, triggered_at = ?, error = ?, check_count = ?,
+                    error_count = ?
                 WHERE id = ?
                 """,
                 (
@@ -184,6 +240,12 @@ class SQLiteJobRepository:
                     _dt_to_text(job.show_at),
                     _dt_to_text(job.release_at),
                     job.booking_url,
+                    job.movie_id,
+                    job.venue_id,
+                    job.city,
+                    _date_to_text(job.show_date),
+                    _time_to_text(job.window_start),
+                    _time_to_text(job.window_end),
                     _json(job.config),
                     job.chat_id,
                     _dt_to_text(job.last_checked_at),

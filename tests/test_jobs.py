@@ -98,6 +98,83 @@ async def test_reminder_requires_booking_url(tmp_path, settings):
             quantity=2,
             release_at=utcnow() + timedelta(minutes=5),
         )
+    await manager.shutdown()
+
+
+async def test_bms_job_persists_window_and_seat_prefs(tmp_path, settings):
+    from datetime import date, time
+
+    from bms_assistant.adapters.providers.registry import build_default_registry
+    from bms_assistant.adapters.storage.sqlite import SQLiteJobRepository
+    from bms_assistant.services.event_bus import EventBus
+    from bms_assistant.services.job_manager import JobManager
+
+    repository = SQLiteJobRepository(tmp_path / "bms.db")
+    await repository.init()
+    manager = JobManager(
+        repository=repository,
+        providers=build_default_registry(),
+        settings=settings,
+        event_bus=EventBus(),
+    )
+    job = await manager.create_job(
+        name="Jailer 2",
+        provider="reminder",
+        venue="ALLU Cinemas: Kokapet",
+        quantity=2,
+        release_at=utcnow() + timedelta(minutes=5),
+        booking_url="https://in.bookmyshow.com/movies/hyderabad/seat-layout/ET00521930/ALUC/6296/20261022",
+        movie_id="ET00521930",
+        venue_id="ALUC",
+        city="hyderabad",
+        show_date=date(2026, 10, 22),
+        window_start=time(18, 0),
+        window_end=time(23, 30),
+        seat_prefs={"category": "GOLD", "max_price": 350, "need_adjacent": True},
+    )
+    loaded = await manager.get_job(job.id)
+    assert loaded.movie_id == "ET00521930"
+    assert loaded.venue_id == "ALUC"
+    assert loaded.city == "hyderabad"
+    assert loaded.show_date == date(2026, 10, 22)
+    assert loaded.window_start == time(18, 0)
+    assert loaded.window_end == time(23, 30)
+    assert loaded.seat_prefs == {
+        "category": "GOLD",
+        "max_price": 350,
+        "need_adjacent": True,
+    }
+    assert loaded.has_show_window is True
+    await manager.shutdown()
+
+
+async def test_bms_job_rejects_backwards_window(tmp_path, settings):
+    from datetime import time
+
+    from bms_assistant.adapters.providers.registry import build_default_registry
+    from bms_assistant.adapters.storage.sqlite import SQLiteJobRepository
+    from bms_assistant.services.event_bus import EventBus
+    from bms_assistant.services.job_manager import JobManager
+
+    repository = SQLiteJobRepository(tmp_path / "bad-window.db")
+    await repository.init()
+    manager = JobManager(
+        repository=repository,
+        providers=build_default_registry(),
+        settings=settings,
+        event_bus=EventBus(),
+    )
+    with pytest.raises(JobValidationError, match="after the start"):
+        await manager.create_job(
+            name="Bad window",
+            provider="mock",
+            venue="Test venue",
+            quantity=1,
+            release_at=utcnow() + timedelta(minutes=5),
+            window_start=time(23, 0),
+            window_end=time(18, 0),
+        )
+    await manager.shutdown()
 
 
 async def test_stop_job(tmp_path, settings):

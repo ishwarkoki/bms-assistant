@@ -6,9 +6,10 @@ import asyncio
 import contextlib
 import logging
 import random
+import re
 from collections import Counter
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -29,6 +30,9 @@ from bms_assistant.ports.repository import JobRepository
 from bms_assistant.services.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
+
+_MOVIE_ID = re.compile(r"^[A-Z]{2,4}\d{4,}$")
+_VENUE_ID = re.compile(r"^[A-Z0-9]{2,12}$")
 
 
 class JobManager:
@@ -100,6 +104,13 @@ class JobManager:
         interval_seconds: int | None = None,
         chat_id: int | None = None,
         auto_start: bool = False,
+        movie_id: str | None = None,
+        venue_id: str | None = None,
+        city: str | None = None,
+        show_date: date | None = None,
+        window_start: time | None = None,
+        window_end: time | None = None,
+        seat_prefs: dict[str, Any] | None = None,
     ) -> Job:
         name = name.strip()
         venue = venue.strip()
@@ -118,6 +129,20 @@ class JobManager:
         if release_at is None:
             raise JobValidationError("Release time is required.")
 
+        movie_id = (movie_id or "").strip().upper() or None
+        if movie_id and not _MOVIE_ID.match(movie_id):
+            raise JobValidationError("BMS movie/event code looks wrong (example: ET00521930).")
+        venue_id = (venue_id or "").strip().upper() or None
+        if venue_id and not _VENUE_ID.match(venue_id):
+            raise JobValidationError("BMS venue code looks wrong (example: ALUC).")
+        city = (city or "").strip().lower() or None
+        if city and len(city) > 60:
+            raise JobValidationError("City must be 60 characters or fewer.")
+        if (window_start is None) != (window_end is None):
+            raise JobValidationError("Set both ends of the showtime window.")
+        if window_start is not None and window_end is not None and window_end < window_start:
+            raise JobValidationError("The showtime window end must be after the start.")
+
         info = self._providers.get(provider).info
         booking_url = (booking_url or "").strip() or None
         if info.requires_booking_url and not booking_url:
@@ -129,6 +154,12 @@ class JobManager:
 
         interval = interval_seconds or self._settings.effective_check_interval
         interval = max(int(interval), self._settings.min_check_interval_seconds)
+        seat_prefs = {
+            key: value for key, value in (seat_prefs or {}).items() if value not in (None, "", [])
+        }
+        config: dict[str, Any] = {"check_interval_seconds": interval}
+        if seat_prefs:
+            config["seats"] = seat_prefs
         now = utcnow()
         job = Job(
             id=new_job_id(),
@@ -142,8 +173,14 @@ class JobManager:
             show_at=show_at,
             release_at=release_at,
             booking_url=booking_url,
-            config={"check_interval_seconds": interval},
+            config=config,
             chat_id=chat_id,
+            movie_id=movie_id,
+            venue_id=venue_id,
+            city=city,
+            show_date=show_date,
+            window_start=window_start,
+            window_end=window_end,
         )
         await self._repository.add_job(job)
         await self._record_event(
@@ -153,6 +190,9 @@ class JobManager:
             {
                 "provider": provider,
                 "release_at": job.release_at.isoformat() if job.release_at else None,
+                "movie_id": movie_id,
+                "venue_id": venue_id,
+                "show_date": show_date.isoformat() if show_date else None,
             },
         )
         if auto_start:
@@ -340,9 +380,22 @@ class JobManager:
         return True
 
     async def _on_triggered(self, job: Job, result: Availability) -> None:
+        schedule = ""
+        if job.show_date:
+            schedule += f" on {job.show_date.strftime('%a, %d %b %Y')}"
+        if job.has_show_window:
+            start = job.window_start.strftime("%I:%M %p").lstrip("0")
+            end = job.window_end.strftime("%I:%M %p").lstrip("0")
+            schedule += f" between {start} and {end}"
+        elif job.show_at:
+            show_local = job.show_at.astimezone(self._settings.tz)
+            schedule += f" at {show_local.strftime('%I:%M %p').lstrip('0')}"
+        seat_note = ""
+        if job.seat_prefs.get("category"):
+            seat_note = f" Seat category: {job.seat_prefs['category']}."
         message = (
-            f"Tickets look live for {job.name} at {job.venue}. "
-            "Open the booking page and complete payment manually."
+            f"Tickets look live for {job.name} at {job.venue}{schedule}. "
+            f"Open the BMS link and pay manually.{seat_note}"
         )
         await self._record_event(
             job.id,
@@ -357,6 +410,7 @@ class JobManager:
                 body=(
                     f"{message}\n\n"
                     f"Seats needed: {job.quantity}. "
+                    "Pay in BMS — never share an OTP, CVV, or UPI PIN. "
                     "The watch stops polling until you mark it booked or restart it."
                 ),
                 job=job,

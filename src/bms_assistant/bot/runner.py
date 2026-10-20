@@ -18,6 +18,7 @@ async def _post_init(application: Application) -> None:
     await application.bot.set_my_commands(
         [
             BotCommand("newjob", "Create a ticket watch"),
+            BotCommand("guide", "Where to copy the BMS link"),
             BotCommand("jobs", "List watches"),
             BotCommand("job", "Show one watch"),
             BotCommand("run", "Start watching"),

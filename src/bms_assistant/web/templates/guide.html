@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}How to add a BMS watch · {{ app_name }}{% endblock %}
+
+{% block content %}
+<section class="guide-hero">
+  <div>
+    <p class="eyebrow">Two-minute setup</p>
+    <h1>How to add a BMS watch</h1>
+    <p>
+      The fastest and most accurate way is to paste a BookMyShow link. The URL
+      already contains the movie code, theatre code, show date, and session — no
+      need to hunt for IDs by hand.
+    </p>
+  </div>
+  <a class="btn btn-primary guide-cta" href="/">Back to dashboard</a>
+</section>
+
+<div class="guide-grid">
+  <section class="guide-step">
+    <div class="guide-step-head">
+      <span class="section-num">01</span>
+      <div>
+        <h2>Find the movie and showtime</h2>
+        <p>Open BookMyShow, choose your city, then open the movie you want.</p>
+      </div>
+    </div>
+    <div class="guide-step-body">
+      <figure class="guide-figure">
+        <div class="shot-wrap">
+          <img src="{{ url_for('static', path='guide/showtimes.png') }}"
+               alt="BookMyShow showtimes page for Jailer 2 with the movie title, date tabs, theatre and 11:20 PM showtime highlighted">
+          <span class="shot-badge shot-badge-1">1</span>
+          <span class="shot-badge shot-badge-2">2</span>
+          <span class="shot-badge shot-badge-blue shot-badge-3">3</span>
+          <span class="shot-badge shot-badge-amber shot-badge-4">4</span>
+        </div>
+        <figcaption>
+          Example: Jailer 2 at ALLU Cinemas: Kokapet, Hyderabad. The layout changes
+          slightly on mobile, but the same information is there.
+        </figcaption>
+      </figure>
+      <ol class="guide-callouts">
+        <li><span class="callout-num">1</span><span><strong>Movie title.</strong> This is what you will see in the watchlist.</span></li>
+        <li><span class="callout-num">2</span><span><strong>Date tab.</strong> Pick the exact date you want to watch.</span></li>
+        <li><span class="callout-num">3</span><span><strong>Theatre card.</strong> The name above the showtime buttons.</span></li>
+        <li><span class="callout-num">4</span><span><strong>Showtime.</strong> Click it to open the seat page.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="guide-step">
+    <div class="guide-step-head">
+      <span class="section-num">02</span>
+      <div>
+        <h2>Copy the link from the seat page</h2>
+        <p>After you click a showtime, copy the URL from your browser's address bar.</p>
+      </div>
+    </div>
+    <div class="guide-step-body">
+      <figure class="guide-figure">
+        <div class="shot-wrap">
+          <img src="{{ url_for('static', path='guide/seat-map.png') }}"
+               alt="BookMyShow seat-selection page with a seat map, category prices and a Pay button">
+        </div>
+        <figcaption>
+          The seat page opens at <code>/movies/&lt;city&gt;/seat-layout/...</code>.
+          The address bar is the part you need; this screenshot is only the page body.
+        </figcaption>
+      </figure>
+
+      <div class="url-card">
+        <p class="url-line">https://in.bookmyshow.com/movies/<span class="u-city">hyderabad</span>/seat-layout/<span class="u-event">ET00521930</span>/<span class="u-venue">ALUC</span>/<span class="u-session">6296</span>/<span class="u-date">20261022</span></p>
+        <ul class="url-legend">
+          <li class="l-city"><strong>City</strong> hyderabad (or hyd)</li>
+          <li class="l-event"><strong>Event code</strong> ET00521930</li>
+          <li class="l-venue"><strong>Venue code</strong> ALUC</li>
+          <li class="l-session"><strong>Session</strong> 6296</li>
+          <li class="l-date"><strong>Show date</strong> 22 Oct 2026</li>
+        </ul>
+      </div>
+      <p>
+        Paste the whole URL into <strong>New watch → Paste your BookMyShow link</strong>.
+        The form fills in the movie title when the URL contains it, plus the event
+        code, theatre code, city, and show date. Seat-page URLs don't contain the
+        movie title, so type that field yourself if it stays blank.
+      </p>
+    </div>
+  </section>
+
+  <section class="guide-step">
+    <div class="guide-step-head">
+      <span class="section-num">03</span>
+      <div>
+        <h2>Shows not announced yet? Use a time window.</h2>
+        <p>You don't need to guess the exact showtime before BMS publishes it.</p>
+      </div>
+    </div>
+    <div class="guide-step-body">
+      <ol>
+        <li>Copy the <strong>movie page</strong> URL instead:
+          <br><code>https://in.bookmyshow.com/movies/hyderabad/jailer-2/ET00521930</code>
+        </li>
+        <li>Set the <strong>show date</strong> to the day you want.</li>
+        <li>Choose <strong>Time window</strong> and enter the range you'd accept, for example <code>18:00</code> to <code>23:30</code>.</li>
+        <li>If you don't know when tickets open, choose <strong>Start watching now — drop time unknown</strong>.</li>
+      </ol>
+      <div class="window-note">
+        <strong>Why a window?</strong> A movie can publish 7:00 PM, 9:30 PM, and
+        11:20 PM shows at different times. A window says “alert me for any show in
+        this range” instead of forcing you to pick a time that isn't on BMS yet.
+      </div>
+      <p>
+        On a movie-page link there is no theatre code. Leave <strong>Venue code</strong>
+        blank to watch any theatre in the city, or add the code if you know it.
+        The <strong>Theatre / venue</strong> field is just a label; use the real name
+        (for example, “ALLU Cinemas: Kokapet”) so alerts are easy to read.
+      </p>
+    </div>
+  </section>
+
+  <section class="guide-step">
+    <div class="guide-step-head">
+      <span class="section-num">04</span>
+      <div>
+        <h2>What goes in each field</h2>
+        <p>A quick reference for the web form and the Telegram <code>/newjob</code> flow.</p>
+      </div>
+    </div>
+    <div class="guide-step-body">
+      <table class="field-table">
+        <thead>
+          <tr><th>Field</th><th>What to enter</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>BMS link</td><td>Address-bar URL from the movie page or seat page</td><td><code>.../seat-layout/ET00521930/ALUC/6296/20261022</code></td></tr>
+          <tr><td>Movie / watch name</td><td>Auto-filled when the URL has a movie title; seat-page links don't, so type it</td><td>Jailer 2</td></tr>
+          <tr><td>Movie / event code</td><td>The <code>ET…</code> code from the URL</td><td><code>ET00521930</code></td></tr>
+          <tr><td>Theatre / venue</td><td>The theatre name, or the short code if that's all you have</td><td>ALLU Cinemas: Kokapet</td></tr>
+          <tr><td>Venue code</td><td>The theatre code from the seat-page URL; blank = all theatres in the city</td><td><code>ALUC</code></td></tr>
+          <tr><td>Show date</td><td>The date on BMS</td><td>2026-10-22</td></tr>
+          <tr><td>Showtime</td><td>Exact time, a window, or any time</td><td>18:00–23:30</td></tr>
+          <tr><td>Ticket drop</td><td>Known drop time, or “start watching now”</td><td>21 Oct, 10:00 AM</td></tr>
+          <tr><td>Tickets</td><td>How many seats you want</td><td>2</td></tr>
+          <tr><td>Seat category / max price</td><td>Optional filters for auto-cart seat scoring</td><td>GOLD · ₹350</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="guide-step">
+    <div class="guide-step-head">
+      <span class="section-num">05</span>
+      <div>
+        <h2>Payment stays in BMS</h2>
+        <p>The handoff opens the show; you choose seats and pay.</p>
+      </div>
+    </div>
+    <div class="guide-step-body">
+      <div class="payment-note">
+        <span class="payment-note-icon">🔒</span>
+        <div>
+          <strong>No cards, CVV, UPI ID, or PIN are stored.</strong>
+          <p>
+            This app never asks for payment credentials. A UPI ID on its own cannot
+            authorise a payment anyway — the approval happens in your UPI app with a
+            PIN or biometric. You'll enter payment details directly in BMS or your
+            bank/UPI app, and only you can approve the charge.
+          </p>
+        </div>
+      </div>
+      <p>
+        In the Telegram alert you'll get the show details and a direct BMS link.
+        In the dashboard, a triggered watch turns amber and shows
+        <strong>Open BMS seats</strong>. Complete the payment there, then mark the
+        watch as booked.
+      </p>
+    </div>
+  </section>
+</div>
+{% endblock %}

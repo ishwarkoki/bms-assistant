@@ -6,8 +6,9 @@
     <p class="eyebrow">Semi-automated ticket watch</p>
     <h1>Get the drop.<br><span>Keep the checkout.</span></h1>
     <p>
-      Create a watch, let it poll on your schedule, and get a loud alert the moment
-      tickets look live. You still approve the payment — always.
+      Paste a BookMyShow link, add a showtime window if the schedule isn't out yet,
+      and get a loud alert the moment tickets look live. You still approve the
+      payment — always.
     </p>
   </div>
   <div class="hero-steps">
@@ -47,7 +48,7 @@
   <aside class="panel side-note">
     <h2>Guardrails</h2>
     <ul class="check-list">
-      <li>No stored cards, CVVs or UPI PINs.</li>
+      <li>No stored cards, CVVs, UPI IDs or UPI PINs.</li>
       <li>No CAPTCHA solving or anti-bot evasion.</li>
       <li>No automated checkout or OTP handling.</li>
       <li>Payments and seat choice stay with you.</li>
@@ -56,6 +57,7 @@
       Use providers that respect the platforms you use. The reminder provider is
       a plain scheduled alert; the mock provider is for development only.
     </p>
+    <p class="small"><a class="section-link" href="/guide">How to find your BMS link →</a></p>
   </aside>
 </div>
 
@@ -73,74 +75,266 @@
       <div class="form-error">{{ form_error }}</div>
     {% endif %}
 
-    <div class="form-grid">
+    <section class="form-section">
+      <div class="section-head">
+        <span class="section-num">01</span>
+        <div>
+          <h3>Paste your BookMyShow link</h3>
+          <p>Recommended. We read the movie, theatre and show codes from the URL.</p>
+        </div>
+        <a class="section-link" href="/guide" target="_blank" rel="noopener">Where do I get this? ↗</a>
+      </div>
+
       <label class="field field-wide">
-        <span>What are you watching?</span>
-        <input type="text" name="name" required maxlength="120"
-               placeholder="e.g. Dune: Part Three — opening night"
-               value="{{ form.get('name', '') }}">
-      </label>
-
-      <label class="field">
-        <span>Provider</span>
-        <select name="provider" id="provider-select">
-          {% for provider in providers %}
-            <option value="{{ provider.name }}"
-                    data-requires-url="{{ 'true' if provider.requires_booking_url else 'false' }}"
-                    data-description="{{ provider.description }}"
-                    {% if form.get('provider', providers[0].name) == provider.name %}selected{% endif %}>
-              {{ provider.label }}
-            </option>
-          {% endfor %}
-        </select>
-        <small class="field-hint" id="provider-hint">{{ providers[0].description }}</small>
-      </label>
-
-      <label class="field">
-        <span>Venue / platform</span>
-        <input type="text" name="venue" required maxlength="160"
-               placeholder="e.g. PVR ICON, Hyderabad"
-               value="{{ form.get('venue', '') }}">
-      </label>
-
-      <label class="field">
-        <span>Release / drop time</span>
-        <input type="datetime-local" name="release_at" id="release-at" required step="1"
-               value="{{ form.get('release_at', default_release_at) }}">
-        <button class="btn btn-ghost btn-tiny" id="quick-release" type="button">
-          set +15s (dev)
-        </button>
-      </label>
-
-      <label class="field">
-        <span>Showtime <em>optional</em></span>
-        <input type="datetime-local" name="show_at"
-               value="{{ form.get('show_at', '') }}">
-      </label>
-
-      <label class="field">
-        <span>Tickets</span>
-        <input type="number" name="quantity" min="1" max="10" step="1"
-               value="{{ form.get('quantity', '2') }}">
-      </label>
-
-      <label class="field">
-        <span>Check every (seconds)</span>
-        <input type="number" name="interval_seconds" min="{{ min_interval }}" max="3600" step="1"
-               value="{{ form.get('interval_seconds', default_interval) }}">
-      </label>
-
-      <label class="field field-wide" id="booking-url-field">
-        <span>Booking / handoff URL <em id="booking-url-required">optional for mock</em></span>
-        <input type="url" name="booking_url" id="booking-url"
-               placeholder="https://in.bookmyshow.com/..."
-               value="{{ form.get('booking_url', '') }}">
+        <span>BMS movie or seat-page URL <em>optional</em></span>
+        <input type="url" name="bms_url" id="bms-url"
+               placeholder="https://in.bookmyshow.com/movies/hyderabad/seat-layout/ET00521930/ALUC/6296/20261022"
+               value="{{ form.get('bms_url', '') }}">
         <small class="field-hint">
-          Where the alert should send you. Mock watches can leave this blank and
-          receive a generated demo link.
+          Copy the address-bar URL from the movie page or from the seat-selection page.
+          Don't have a showtime yet? Use the movie-page URL and set a time window below.
         </small>
       </label>
-    </div>
+
+      <div class="link-actions">
+        <button class="btn btn-ghost btn-tiny" id="bms-example" type="button">Use an example</button>
+        <span class="muted small">BMS link parsing happens on this machine; nothing is sent anywhere.</span>
+      </div>
+
+      <div class="bms-preview" id="bms-preview" hidden>
+        <span class="preview-kicker">Detected from link</span>
+        <div class="preview-grid">
+          <div><span>Movie</span><strong id="preview-movie">—</strong></div>
+          <div><span>City</span><strong id="preview-city">—</strong></div>
+          <div><span>Event code</span><strong id="preview-event">—</strong></div>
+          <div><span>Venue code</span><strong id="preview-venue">—</strong></div>
+          <div><span>Show date</span><strong id="preview-date">—</strong></div>
+          <div><span>Session</span><strong id="preview-session">—</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-head">
+        <span class="section-num">02</span>
+        <div>
+          <h3>What are you watching?</h3>
+          <p>Auto-filled when the link contains it. Edit anything that looks off.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span>Movie / watch name</span>
+          <input type="text" name="name" id="job-name" required maxlength="120"
+                 placeholder="e.g. Jailer 2"
+                 value="{{ form.get('name', '') }}">
+          <small class="field-hint">
+            Auto-filled when the link contains the movie title. Seat-page links
+            only contain codes, so type the movie name here if it's blank.
+          </small>
+        </label>
+
+        <label class="field">
+          <span>BMS event code <em>optional</em></span>
+          <input type="text" name="movie_id" id="movie-id-input"
+                 placeholder="ET00521930" value="{{ form.get('movie_id', '') }}">
+          <small class="field-hint">The <code>ET…</code> code in the BMS URL.</small>
+        </label>
+
+        <label class="field">
+          <span>BMS venue code <em>optional</em></span>
+          <input type="text" name="venue_id" id="venue-id-input"
+                 placeholder="ALUC" value="{{ form.get('venue_id', '') }}">
+          <small class="field-hint">The short theatre code in the seat-page URL.</small>
+        </label>
+
+        <label class="field">
+          <span>Theatre / venue</span>
+          <input type="text" name="venue" id="venue-input" required maxlength="160"
+                 placeholder="e.g. ALLU Cinemas: Kokapet"
+                 value="{{ form.get('venue', '') }}">
+          <small class="field-hint">Auto-fills with the code if the link has one. Add a friendly name if you like.</small>
+        </label>
+
+        <label class="field">
+          <span>City <em>optional</em></span>
+          <input type="text" name="city" id="city-input"
+                 placeholder="e.g. hyderabad" value="{{ form.get('city', '') }}">
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-head">
+        <span class="section-num">03</span>
+        <div>
+          <h3>When should we alert you?</h3>
+          <p>If showtimes aren't announced yet, use a window instead of an exact time.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Show date</span>
+          <input type="date" name="show_date" id="show-date-input"
+                 value="{{ form.get('show_date', '') }}">
+          <small class="field-hint">The date on BMS, e.g. 2026-10-22.</small>
+        </label>
+
+        <label class="field">
+          <span>Showtime mode</span>
+          {% set showtime_mode = form.get('showtime_mode', 'any') %}
+          <select name="showtime_mode" id="showtime-mode">
+            <option value="any" {% if showtime_mode == 'any' %}selected{% endif %}>Any showtime on that date</option>
+            <option value="window" {% if showtime_mode == 'window' %}selected{% endif %}>Time window (recommended for unreleased shows)</option>
+            <option value="exact" {% if showtime_mode == 'exact' %}selected{% endif %}>Exact showtime</option>
+          </select>
+        </label>
+
+        <label class="field" id="exact-time-field" {% if showtime_mode != 'exact' %}hidden{% endif %}>
+          <span>Exact showtime</span>
+          <input type="time" name="show_time" value="{{ form.get('show_time', '') }}">
+        </label>
+
+        <label class="field" id="window-start-field" {% if showtime_mode != 'window' %}hidden{% endif %}>
+          <span>Earliest showtime</span>
+          <input type="time" name="window_start" value="{{ form.get('window_start', '') }}">
+        </label>
+
+        <label class="field" id="window-end-field" {% if showtime_mode != 'window' %}hidden{% endif %}>
+          <span>Latest showtime</span>
+          <input type="time" name="window_end" value="{{ form.get('window_end', '') }}">
+        </label>
+      </div>
+
+      <div class="window-note">
+        <strong>Not on sale / no showtimes yet?</strong>
+        Pick <em>Time window</em> and enter the range you'd accept, e.g. 18:00–23:30.
+        The watcher alerts when a show lands inside that range. No guessing an exact time.
+      </div>
+
+      <div class="form-grid">
+        <div class="field field-wide">
+          <span>Ticket drop</span>
+          {% set release_mode = form.get('release_mode', 'at') %}
+          <div class="choice-row">
+            <label class="choice">
+              <input type="radio" name="release_mode" value="at" {% if release_mode != 'now' %}checked{% endif %}>
+              <span>I know when tickets open</span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="release_mode" value="now" {% if release_mode == 'now' %}checked{% endif %}>
+              <span>Start watching now — drop time unknown</span>
+            </label>
+          </div>
+        </div>
+
+        <label class="field" id="release-at-field" {% if release_mode == 'now' %}hidden{% endif %}>
+          <span>Release / drop time</span>
+          <input type="datetime-local" name="release_at" id="release-at" step="1"
+                 value="{{ form.get('release_at', default_release_at) }}">
+          <button class="btn btn-ghost btn-tiny" id="quick-release" type="button">
+            set +15s (dev)
+          </button>
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-head">
+        <span class="section-num">04</span>
+        <div>
+          <h3>Seats &amp; payment</h3>
+          <p>Seat preferences are saved for the auto-cart step. Payment is always yours.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Tickets</span>
+          <input type="number" name="quantity" min="1" max="10" step="1"
+                 value="{{ form.get('quantity', '2') }}">
+        </label>
+
+        <label class="field">
+          <span>Seat category <em>optional</em></span>
+          <input type="text" name="seat_category" placeholder="e.g. GOLD"
+                 value="{{ form.get('seat_category', '') }}">
+          <small class="field-hint">Leave blank to accept any category.</small>
+        </label>
+
+        <label class="field">
+          <span>Max price per ticket <em>optional</em></span>
+          <input type="number" name="seat_max_price" min="0" max="100000" step="1"
+                 placeholder="e.g. 350" value="{{ form.get('seat_max_price', '') }}">
+        </label>
+
+        <label class="field">
+          <span>Seat preference</span>
+          {% set seat_zone = form.get('seat_zone', 'any') %}
+          <select name="seat_zone">
+            <option value="any" {% if seat_zone == 'any' %}selected{% endif %}>Any available seats</option>
+            <option value="center" {% if seat_zone == 'center' %}selected{% endif %}>Center</option>
+            <option value="front" {% if seat_zone == 'front' %}selected{% endif %}>Front</option>
+            <option value="back" {% if seat_zone == 'back' %}selected{% endif %}>Back</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="check-row">
+        {% set together_checked = form.get('seats_together') in ('on', 'true', '1', 'yes') %}
+        <input type="checkbox" name="seats_together" {% if together_checked %}checked{% endif %}>
+        <span>Prefer adjacent seats</span>
+      </label>
+
+      <div class="payment-note">
+        <span class="payment-note-icon">🔒</span>
+        <div>
+          <strong>Payment stays manual — and we never store payment credentials.</strong>
+          <p>No card numbers, CVV, UPI ID, or PIN are saved by this app. You complete payment in BMS after the handoff.</p>
+        </div>
+      </div>
+    </section>
+
+    <details class="advanced">
+      <summary>Advanced / testing</summary>
+      <div class="form-grid">
+        <label class="field">
+          <span>Provider</span>
+          {% set selected_provider = form.get('provider', 'reminder') %}
+          <select name="provider" id="provider-select">
+            {% for provider in providers %}
+              <option value="{{ provider.name }}"
+                      data-requires-url="{{ 'true' if provider.requires_booking_url else 'false' }}"
+                      data-description="{{ provider.description }}"
+                      {% if selected_provider == provider.name %}selected{% endif %}>
+                {{ provider.label }}
+              </option>
+            {% endfor %}
+          </select>
+          <small class="field-hint" id="provider-hint">
+            {% for provider in providers %}{% if selected_provider == provider.name %}{{ provider.description }}{% endif %}{% endfor %}
+          </small>
+        </label>
+
+        <label class="field">
+          <span>Check every (seconds)</span>
+          <input type="number" name="interval_seconds" min="{{ min_interval }}" max="3600" step="1"
+                 value="{{ form.get('interval_seconds', default_interval) }}">
+        </label>
+
+        <label class="field field-wide" id="booking-url-field">
+          <span>Booking / handoff URL <em id="booking-url-required">optional for mock</em></span>
+          <input type="url" name="booking_url" id="booking-url"
+                 placeholder="https://in.bookmyshow.com/..."
+                 value="{{ form.get('booking_url', '') }}">
+          <small class="field-hint">
+            Auto-filled from the BMS link. The alert sends you here; mock watches can use a demo link.
+          </small>
+        </label>
+      </div>
+    </details>
 
     <label class="check-row">
       {% set auto_start_checked = form.get('auto_start') in ('on', 'true', '1', 'yes') if form else true %}

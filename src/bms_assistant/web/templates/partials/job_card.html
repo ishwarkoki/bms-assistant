@@ -13,14 +13,34 @@
   <h3 class="job-name">{{ job.name }}</h3>
   <p class="job-venue">{{ job.venue }}</p>
 
+  {% if job.movie_id or job.venue_id or job.show_date or job.has_show_window or job.seat_prefs %}
+    <div class="job-tags">
+      {% if job.city %}<span class="chip">{{ job.city }}</span>{% endif %}
+      {% if job.movie_id %}<span class="chip chip-code" title="BMS event code">{{ job.movie_id }}</span>{% endif %}
+      {% if job.venue_id %}<span class="chip chip-code" title="BMS venue code">{{ job.venue_id }}</span>{% endif %}
+      {% if job.show_date %}<span class="chip">{{ job.show_date|shortdate }}</span>{% endif %}
+      {% if job.has_show_window %}
+        <span class="chip">{{ job.window_start|clock }}–{{ job.window_end|clock }}</span>
+      {% elif job.show_at %}
+        <span class="chip">{{ job.show_at|localtime }}</span>
+      {% endif %}
+      {% if job.seat_prefs.get('category') %}
+        <span class="chip">{{ job.seat_prefs.get('category') }}</span>
+      {% endif %}
+      {% if job.seat_prefs.get('max_price') %}
+        <span class="chip">≤ ₹{{ job.seat_prefs.get('max_price') }}</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if status == 'triggered' %}
     <div class="trigger-strip">
       <span class="trigger-dot"></span>
-      <p>Tickets look live. Open the booking page and pay manually.</p>
+      <p>Tickets look live. Open the booking page and pay manually in BMS. Never share an OTP, CVV, or UPI PIN.</p>
     </div>
     {% if job.booking_url %}
       <a class="btn btn-success btn-block" href="{{ job.booking_url }}" target="_blank" rel="noopener">
-        Open booking ↗
+        Open BMS seats ↗
       </a>
     {% endif %}
   {% endif %}
@@ -40,7 +60,15 @@
     </div>
     <div>
       <dt>Show</dt>
-      <dd>{{ job.show_at|localtime if job.show_at else '—' }}</dd>
+      <dd>
+        {% if job.show_at %}
+          {{ job.show_at|localtime }}
+        {% elif job.has_show_window %}
+          {{ (job.show_date|shortdate) if job.show_date else 'Any date' }} · {{ job.window_start|clock }}–{{ job.window_end|clock }}
+        {% elif job.show_date %}
+          {{ job.show_date|shortdate }} · any time
+        {% else %}—{% endif %}
+      </dd>
     </div>
     <div>
       <dt>Tickets</dt>

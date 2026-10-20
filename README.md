@@ -9,6 +9,8 @@ It never completes a payment. There is no anti-bot evasion, CAPTCHA solving, sto
 ## What it does
 
 - Create watches from the web UI or Telegram.
+- Paste a BookMyShow link to auto-fill the movie/event code, venue code, city, and show date.
+- Watch an exact showtime, a showtime window, or a whole date — including shows that are not on sale yet.
 - Poll on a per-watch interval with jitter.
 - Persist jobs and activity events in SQLite.
 - Alert via the dashboard (SSE + sound), Telegram, and logs.
@@ -44,13 +46,40 @@ Local development has no login by default because the app binds to `127.0.0.1`. 
 ### First dev test
 
 1. Click **New watch**.
-2. Leave the provider as **Mock drop (dev)**.
+2. Open **Advanced / testing** and choose **Mock drop (dev)**.
 3. Click **set +15s (dev)** next to the release time.
 4. Enter a name and venue, keep 2 tickets, and create the watch.
 5. Watch the card transition to **Live now**; the dashboard beeps and the activity feed updates.
 6. Click **Open booking** (a demo link) or **Mark booked**.
 
 You can also use the mock provider from Telegram with `/newjob` → Mock → `/now` at the release step.
+
+### Create a real BMS watch
+
+The normal provider is **Scheduled reminder** — a local scheduled alert with
+your BMS link, no scraping and no login required in the app.
+
+1. Open the movie or seat page on BookMyShow in your browser.
+2. Copy the URL from the address bar.
+3. In the dashboard, click **New watch** and paste it into **Paste your BookMyShow link**.
+   The movie, event code, city, venue code, and show date are filled in from the URL.
+4. If the movie page has no showtimes yet, pick **Time window** and enter the
+   earliest and latest times you'd accept (for example, 18:00–23:30). If you don't
+   know when tickets open, choose **Start watching now — drop time unknown**.
+5. Set your seat category and maximum price if you want them recorded for the
+   auto-cart step. Payment is still manual.
+6. Leave **Start watching immediately** checked and create the watch.
+
+The web guide at <http://127.0.0.1:8765/guide> and the Telegram `/guide` command
+have annotated screenshots showing exactly which part of the BMS URL is used.
+Seat-page links do not contain the movie title, so type the movie name if that
+field stays blank.
+
+Showtime modes:
+
+- **Any showtime on that date** — alert for any show on the selected date.
+- **Time window** — best for unreleased schedules; accepts a range such as `18:00–23:30`.
+- **Exact showtime** — only when BMS has published the time you want.
 
 For scripted dev tests:
 
@@ -78,7 +107,7 @@ curl -X POST http://127.0.0.1:8765/api/jobs \
 
 Watches created from Telegram store that chat id automatically. Web-created watches use `BMS_TELEGRAM_CHAT_ID`.
 
-Useful commands: `/newjob`, `/jobs`, `/job <id>`, `/run`, `/stop`, `/booked`, `/delete`, `/testalert`, `/status`.
+Useful commands: `/newjob`, `/guide`, `/jobs`, `/job <id>`, `/run`, `/stop`, `/booked`, `/delete`, `/testalert`, `/status`.
 
 ## Run it on your own machine (free)
 
@@ -165,6 +194,22 @@ Headers and cookies are never captured, and obvious secret/PII keys (tokens, ema
 - Login is manual and one-time; credentials and PINs are never stored.
 - One hold at a time, one account, polite polling with backoff.
 
+### Why there is no saved card or UPI ID
+
+Saving payment credentials would make the app a more attractive target without
+making checkout meaningfully faster:
+
+- A stored card needs the number, expiry, CVV, and often an OTP. Keeping those on
+  disk turns a ticket-watch database into a payment-credential database.
+- A UPI ID by itself cannot authorize a payment. The charge is approved with a
+  PIN or biometric inside your UPI app, and that approval must stay with you.
+- A half-automated checkout that stores or replays payment data would cross the
+  same line as automated payment, which this project explicitly does not do.
+
+Instead, the handoff gives you the show details, the BMS link, the ticket count,
+and a hold countdown. You choose seats and pay in BMS (or in your UPI/bank app)
+with the credentials already saved by those apps.
+
 ## Configuration
 
 All settings use the `BMS_` prefix and are loaded from `.env`.
@@ -235,6 +280,8 @@ The dependency rule is inward: `domain` knows nothing about FastAPI, SQLite, or 
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `GET` | `/` | Dashboard |
+| `GET` | `/guide` | Illustrated BMS link and setup guide |
 | `GET` | `/health` | Health and watch counts |
 | `GET` | `/api/jobs` | All watches as JSON |
 | `GET` | `/api/jobs/{id}` | One watch |
@@ -249,6 +296,13 @@ The dependency rule is inward: `domain` knows nothing about FastAPI, SQLite, or 
 | `POST` | `/jobs/{id}/delete` | Delete |
 
 When authentication is enabled, send the browser cookie or `Authorization: Bearer $BMS_API_TOKEN`. `/health` stays public for platform health checks.
+
+`POST /api/jobs` also accepts the BMS criteria fields: `movie_id`, `venue_id`,
+`city`, `show_date` (`YYYY-MM-DD`), `window_start` and `window_end` (`HH:MM`), and
+`seat_prefs` (`{"category": "GOLD", "max_price": 350, "zone": "center", "need_adjacent": true}`).
+The form endpoint `POST /jobs` additionally accepts `bms_url`, `showtime_mode`
+(`any`, `window`, `exact`), `release_mode` (`at`, `now`), and the seat preference
+form fields, and parses the BMS URL into those criteria.
 
 ## Adding a provider
 
