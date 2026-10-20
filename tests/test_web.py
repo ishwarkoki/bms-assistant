@@ -22,6 +22,7 @@ async def test_dashboard_and_create_job(tmp_path):
         timezone="UTC",
         default_check_interval_seconds=2,
         min_check_interval_seconds=2,
+        _env_file=None,
     )
     repository = SQLiteJobRepository(settings.database_path)
     await repository.init()
